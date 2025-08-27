@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Calendar, Users, Settings, BarChart3, Bell, Building2, ChevronDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calendar, Users, Settings, BarChart3, Building2, ChevronDown, Plus, FolderOpen } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
-
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -14,28 +14,30 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Subsector {
+  id: string;
+  name: string;
+  description?: string;
+}
 
 const mainItems = [
   { title: "Calendário", url: "/", icon: Calendar },
   { title: "Equipe", url: "/team", icon: Users },
   { title: "Relatórios", url: "/reports", icon: BarChart3 },
-  { title: "Notificações", url: "/notifications", icon: Bell },
-];
-
-// Subsetores mock - em produção virão do backend baseado no setor do usuário
-const subsetores = [
-  { id: 1, name: "Desenvolvimento", color: "bg-blue-500" },
-  { id: 2, name: "Design", color: "bg-purple-500" },
-  { id: 3, name: "Marketing", color: "bg-green-500" },
-  { id: 4, name: "Vendas", color: "bg-orange-500" },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { profile, isManager } = useAuth();
   const location = useLocation();
-  const currentPath = location.pathname;
+  const [subsectors, setSubsectors] = useState<Subsector[]>([]);
   const [subsetoresOpen, setSubsetoresOpen] = useState(true);
-
+  const [loading, setLoading] = useState(true);
+  
+  const currentPath = location.pathname;
   const collapsed = state === "collapsed";
 
   const isActive = (path: string) => currentPath === path;
@@ -43,6 +45,56 @@ export function AppSidebar() {
     isActive 
       ? "bg-primary text-primary-foreground font-medium shadow-primary" 
       : "hover:bg-secondary-hover text-foreground";
+
+  useEffect(() => {
+    const fetchSubsectors = async () => {
+      if (!profile?.sector_id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('subsectors')
+          .select('*')
+          .eq('sector_id', profile.sector_id)
+          .order('name');
+
+        if (error) throw error;
+        setSubsectors(data || []);
+      } catch (error) {
+        console.error('Error fetching subsectors:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSubsectors();
+  }, [profile?.sector_id]);
+
+  const createSubsector = async () => {
+    if (!isManager || !profile?.sector_id) return;
+
+    const name = prompt('Nome do novo subsetor:');
+    if (!name?.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('subsectors')
+        .insert({
+          name: name.trim(),
+          sector_id: profile.sector_id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setSubsectors(prev => [...prev, data]);
+    } catch (error) {
+      console.error('Error creating subsector:', error);
+      alert('Erro ao criar subsetor. Tente novamente.');
+    }
+  };
 
   return (
     <Sidebar className={`${collapsed ? "w-14" : "w-64"} border-r border-border bg-card`} collapsible="icon">
@@ -86,35 +138,53 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Subsetores */}
-        {!collapsed && (
+        {!collapsed && !loading && (
           <Collapsible open={subsetoresOpen} onOpenChange={setSubsetoresOpen}>
             <SidebarGroup>
               <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="flex items-center justify-between cursor-pointer hover:text-primary transition-colors">
-                  Subsetores
-                  <ChevronDown className={`h-4 w-4 transition-transform ${subsetoresOpen ? "rotate-180" : ""}`} />
-                </SidebarGroupLabel>
+                <div className="flex items-center justify-between">
+                  <SidebarGroupLabel className="flex items-center cursor-pointer hover:text-primary transition-colors">
+                    Subsetores
+                    <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${subsetoresOpen ? "rotate-180" : ""}`} />
+                  </SidebarGroupLabel>
+                  {isManager && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={createSubsector}
+                      title="Criar novo subsetor"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {subsetores.map((subsetor) => (
-                      <SidebarMenuItem key={subsetor.id}>
+                    {subsectors.map((subsector) => (
+                      <SidebarMenuItem key={subsector.id}>
                         <SidebarMenuButton asChild className="h-9">
                           <NavLink 
-                            to={`/setor/${subsetor.id}`} 
+                            to={`/subsector/${subsector.id}`} 
                             className={({ isActive }) => 
                               `flex items-center gap-3 ${isActive 
                                 ? "bg-secondary text-secondary-foreground font-medium" 
                                 : "hover:bg-secondary-hover text-muted-foreground"}`
                             }
                           >
-                            <div className={`w-3 h-3 rounded-full ${subsetor.color}`} />
-                            <span className="text-sm">{subsetor.name}</span>
+                            <FolderOpen className="w-4 h-4" />
+                            <span className="text-sm">{subsector.name}</span>
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
+                    {subsectors.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        {isManager ? 'Clique em + para criar um subsetor' : 'Nenhum subsetor disponível'}
+                      </div>
+                    )}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </CollapsibleContent>
