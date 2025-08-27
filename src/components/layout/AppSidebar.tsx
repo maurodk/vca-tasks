@@ -1,29 +1,18 @@
 import { useState, useEffect } from "react";
-import { Calendar, Users, Settings, BarChart3, Building2, ChevronDown, Plus, FolderOpen } from "lucide-react";
+import { Settings, Building2, ChevronDown, Plus, FolderOpen } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { SubsectorModal } from "@/components/subsectors/SubsectorModal";
+
 interface Subsector {
   id: string;
   name: string;
   description?: string;
 }
-const mainItems = [{
-  title: "Calendário",
-  url: "/",
-  icon: Calendar
-}, {
-  title: "Equipe",
-  url: "/team",
-  icon: Users
-}, {
-  title: "Relatórios",
-  url: "/reports",
-  icon: BarChart3
-}];
 export function AppSidebar() {
   const {
     state
@@ -36,6 +25,7 @@ export function AppSidebar() {
   const [subsectors, setSubsectors] = useState<Subsector[]>([]);
   const [subsetoresOpen, setSubsetoresOpen] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [showSubsectorModal, setShowSubsectorModal] = useState(false);
   const currentPath = location.pathname;
   const collapsed = state === "collapsed";
   const isActive = (path: string) => currentPath === path;
@@ -45,43 +35,31 @@ export function AppSidebar() {
     isActive: boolean;
   }) => isActive ? "bg-primary text-primary-foreground font-medium shadow-primary" : "hover:bg-secondary-hover text-foreground";
   useEffect(() => {
-    const fetchSubsectors = async () => {
-      if (!profile?.sector_id) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const {
-          data,
-          error
-        } = await supabase.from('subsectors').select('*').eq('sector_id', profile.sector_id).order('name');
-        if (error) throw error;
-        setSubsectors(data || []);
-      } catch (error) {
-        console.error('Error fetching subsectors:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSubsectors();
   }, [profile?.sector_id]);
-  const createSubsector = async () => {
-    if (!isManager || !profile?.sector_id) return;
-    const name = prompt('Nome do novo subsetor:');
-    if (!name?.trim()) return;
+  const handleSubsectorCreated = () => {
+    fetchSubsectors();
+    setShowSubsectorModal(false);
+  };
+
+  const fetchSubsectors = async () => {
+    if (!profile?.sector_id) {
+      setLoading(false);
+      return;
+    }
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('subsectors').insert({
-        name: name.trim(),
-        sector_id: profile.sector_id
-      }).select().single();
+      const { data, error } = await supabase
+        .from('subsectors')
+        .select('*')
+        .eq('sector_id', profile.sector_id)
+        .order('name');
+      
       if (error) throw error;
-      setSubsectors(prev => [...prev, data]);
+      setSubsectors(data || []);
     } catch (error) {
-      console.error('Error creating subsector:', error);
-      alert('Erro ao criar subsetor. Tente novamente.');
+      console.error('Error fetching subsectors:', error);
+    } finally {
+      setLoading(false);
     }
   };
   return <Sidebar className={`${collapsed ? "w-14" : "w-64"} border-r border-border bg-card`} collapsible="icon">
@@ -101,22 +79,6 @@ export function AppSidebar() {
             </div>}
         </div>
 
-        {/* Menu Principal */}
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainItems.map(item => <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-10">
-                    <NavLink to={item.url} end className={getNavCls}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span className="ml-2 text-slate-950">{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
 
         {/* Subsetores */}
         {!collapsed && !loading && <Collapsible open={subsetoresOpen} onOpenChange={setSubsetoresOpen}>
@@ -127,7 +89,7 @@ export function AppSidebar() {
                     Subsetores
                     <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${subsetoresOpen ? "rotate-180" : ""}`} />
                   </SidebarGroupLabel>
-                  {isManager && <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={createSubsector} title="Criar novo subsetor">
+                  {isManager && <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowSubsectorModal(true)} title="Criar novo subsetor">
                       <Plus className="h-3 w-3" />
                     </Button>}
                 </div>
@@ -160,7 +122,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild className="h-10">
-                  <NavLink to="/settings" className={getNavCls}>
+                  <NavLink to="/profile" className={getNavCls}>
                     <Settings className="h-4 w-4" />
                     {!collapsed && <span className="ml-2">Configurações</span>}
                   </NavLink>
@@ -170,5 +132,11 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SubsectorModal 
+        open={showSubsectorModal}
+        onOpenChange={setShowSubsectorModal}
+        onSubsectorCreated={handleSubsectorCreated}
+      />
     </Sidebar>;
 }

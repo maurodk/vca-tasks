@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
+import Subsector from "./pages/Subsector";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,11 @@ const App = () => (
           <Route path="/" element={
             <AuthGuard>
               <Index />
+            </AuthGuard>
+          } />
+          <Route path="/subsector/:id" element={
+            <AuthGuard>
+              <Subsector />
             </AuthGuard>
           } />
           <Route path="/profile" element={
