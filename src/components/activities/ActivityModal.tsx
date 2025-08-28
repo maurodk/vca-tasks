@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Calendar, Clock, AlertCircle, User } from "lucide-react";
+import { Calendar, Clock, AlertCircle, User, Archive } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -38,6 +38,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Activity, useActivities } from "@/hooks/useActivities";
 
 const activitySchema = z.object({
   title: z.string().min(1, "Título é obrigatório"),
@@ -54,7 +55,7 @@ type ActivityFormData = z.infer<typeof activitySchema>;
 interface ActivityModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  activity?: any;
+  activity?: Activity;
   onSuccess?: () => void;
 }
 
@@ -73,7 +74,9 @@ interface Subsector {
 export function ActivityModal({ open, onOpenChange, activity, onSuccess }: ActivityModalProps) {
   const { profile, user, isManager } = useAuth();
   const { toast } = useToast();
+  const { archiveActivity } = useActivities();
   const [loading, setLoading] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [subsectors, setSubsectors] = useState<Subsector[]>([]);
 
@@ -200,6 +203,25 @@ export function ActivityModal({ open, onOpenChange, activity, onSuccess }: Activ
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!activity) return;
+
+    setArchiveLoading(true);
+    try {
+      await archiveActivity(activity.id);
+      onSuccess?.();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao arquivar atividade.",
+        variant: "destructive",
+      });
+    } finally {
+      setArchiveLoading(false);
     }
   };
 
@@ -426,13 +448,28 @@ export function ActivityModal({ open, onOpenChange, activity, onSuccess }: Activ
               />
             )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Salvando..." : isEditing ? "Atualizar" : "Criar"}
-              </Button>
+            <DialogFooter className="flex justify-between">
+              <div>
+                {isEditing && (
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    onClick={handleArchive}
+                    disabled={archiveLoading}
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    {archiveLoading ? "Arquivando..." : "Arquivar"}
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Salvando..." : isEditing ? "Atualizar" : "Criar"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </Form>

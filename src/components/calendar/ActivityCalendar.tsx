@@ -1,17 +1,17 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Clock, CheckCircle, Circle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, CheckCircle, Circle, Edit, Archive, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface Activity {
-  id: string;
-  title: string;
-  description: string;
-  status: "pending" | "in-progress" | "completed";
-  priority: "low" | "medium" | "high";
-  estimatedTime: string;
-}
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useActivities, Activity } from "@/hooks/useActivities";
+import { ActivityModal } from "@/components/activities/ActivityModal";
 
 interface DayData {
   date: Date;
@@ -19,37 +19,13 @@ interface DayData {
   weekNumber: number;
 }
 
-const mockActivities: Activity[] = [
-  {
-    id: "1",
-    title: "Revisão de código React",
-    description: "Revisar PRs da equipe",
-    status: "completed",
-    priority: "high",
-    estimatedTime: "2h"
-  },
-  {
-    id: "2",
-    title: "Reunião diária",
-    description: "Daily stand-up com a equipe",
-    status: "completed",
-    priority: "medium",
-    estimatedTime: "30min"
-  },
-  {
-    id: "3",
-    title: "Implementar API de notificações",
-    description: "Desenvolver endpoint para sistema de notificações",
-    status: "in-progress",
-    priority: "high",
-    estimatedTime: "4h"
-  }
-];
-
 export const ActivityCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<DayData | null>(null);
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
 
+  const { activities, loading, updateActivityStatus, archiveActivity, refetch } = useActivities();
   const today = new Date();
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -94,12 +70,16 @@ export const ActivityCalendar = () => {
       const date = new Date(currentYear, currentMonth, day);
       const weekNumber = getWeekNumber(date);
       
-      // Mock: adicionar atividades apenas para hoje
-      const activities = date.toDateString() === today.toDateString() ? mockActivities : [];
+      // Filtrar atividades para este dia
+      const dayActivities = activities.filter(activity => {
+        if (!activity.due_date) return false;
+        const activityDate = new Date(activity.due_date);
+        return activityDate.toDateString() === date.toDateString();
+      });
       
       days.push({
         date,
-        activities,
+        activities: dayActivities,
         weekNumber
       });
     }
@@ -119,7 +99,7 @@ export const ActivityCalendar = () => {
     switch (status) {
       case "completed":
         return <CheckCircle className="h-3 w-3 text-accent" />;
-      case "in-progress":
+      case "in_progress":
         return <Clock className="h-3 w-3 text-warning" />;
       default:
         return <Circle className="h-3 w-3 text-muted-foreground" />;
@@ -135,6 +115,41 @@ export const ActivityCalendar = () => {
       default:
         return "bg-secondary text-secondary-foreground";
     }
+  };
+
+  const handleNewActivity = () => {
+    setEditingActivity(null);
+    setActivityModalOpen(true);
+  };
+
+  const handleEditActivity = (activity: Activity) => {
+    setEditingActivity(activity);
+    setActivityModalOpen(true);
+  };
+
+  const handleActivitySuccess = () => {
+    refetch();
+    setSelectedDay(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        activities: activities.filter(activity => {
+          if (!activity.due_date) return false;
+          const activityDate = new Date(activity.due_date);
+          return activityDate.toDateString() === prev.date.toDateString();
+        })
+      };
+    });
+  };
+
+  const handleStatusChange = async (activityId: string, newStatus: Activity['status']) => {
+    await updateActivityStatus(activityId, newStatus);
+    handleActivitySuccess();
+  };
+
+  const handleArchiveActivity = async (activityId: string) => {
+    await archiveActivity(activityId);
+    handleActivitySuccess();
   };
 
   return (
@@ -167,55 +182,63 @@ export const ActivityCalendar = () => {
           </div>
 
           {/* Grid do calendário */}
-          <div className="grid grid-cols-7 gap-2">
-            {calendarDays.map((dayData, index) => (
-              <div
-                key={index}
-                className={`min-h-24 p-2 border rounded-lg transition-all duration-200 cursor-pointer ${
-                  dayData
-                    ? dayData.date.toDateString() === today.toDateString()
-                      ? "bg-primary/10 border-primary"
-                      : "bg-card hover:bg-card-hover border-border hover:border-border-hover"
-                    : "bg-muted/20"
-                } ${selectedDay?.date.toDateString() === dayData?.date.toDateString() ? "ring-2 ring-primary" : ""}`}
-                onClick={() => dayData && setSelectedDay(dayData)}
-              >
-                {dayData && (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-sm font-medium ${
-                        dayData.date.toDateString() === today.toDateString()
-                          ? "text-primary"
-                          : "text-foreground"
-                      }`}>
-                        {dayData.date.getDate()}
-                      </span>
-                      {dayData.activities.length > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          {dayData.activities.length}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      {dayData.activities.slice(0, 2).map(activity => (
-                        <div
-                          key={activity.id}
-                          className="text-xs p-1 bg-secondary rounded text-secondary-foreground truncate"
-                        >
-                          {activity.title}
-                        </div>
-                      ))}
-                      {dayData.activities.length > 2 && (
-                        <div className="text-xs text-muted-foreground">
-                          +{dayData.activities.length - 2} mais
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, index) => (
+                <Skeleton key={index} className="min-h-24 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 gap-2">
+              {calendarDays.map((dayData, index) => (
+                <div
+                  key={index}
+                  className={`min-h-24 p-2 border rounded-lg transition-all duration-200 cursor-pointer ${
+                    dayData
+                      ? dayData.date.toDateString() === today.toDateString()
+                        ? "bg-primary/10 border-primary"
+                        : "bg-card hover:bg-card-hover border-border hover:border-border-hover"
+                      : "bg-muted/20"
+                  } ${selectedDay?.date.toDateString() === dayData?.date.toDateString() ? "ring-2 ring-primary" : ""}`}
+                  onClick={() => dayData && setSelectedDay(dayData)}
+                >
+                  {dayData && (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-medium ${
+                          dayData.date.toDateString() === today.toDateString()
+                            ? "text-primary"
+                            : "text-foreground"
+                        }`}>
+                          {dayData.date.getDate()}
+                        </span>
+                        {dayData.activities.length > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {dayData.activities.length}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        {dayData.activities.slice(0, 2).map(activity => (
+                          <div
+                            key={activity.id}
+                            className="text-xs p-1 bg-secondary rounded text-secondary-foreground truncate"
+                          >
+                            {activity.title}
+                          </div>
+                        ))}
+                        {dayData.activities.length > 2 && (
+                          <div className="text-xs text-muted-foreground">
+                            +{dayData.activities.length - 2} mais
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -229,12 +252,10 @@ export const ActivityCalendar = () => {
                 : "Selecione um dia"
               }
             </CardTitle>
-            {selectedDay && (
-              <Button size="sm" className="bg-gradient-primary">
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Atividade
-              </Button>
-            )}
+            <Button size="sm" className="bg-gradient-primary" onClick={handleNewActivity}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Atividade
+            </Button>
           </div>
           {selectedDay && (
             <p className="text-sm text-muted-foreground">
@@ -249,7 +270,7 @@ export const ActivityCalendar = () => {
                 <div className="text-center py-8 text-muted-foreground">
                   <Circle className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>Nenhuma atividade para este dia</p>
-                  <Button variant="outline" size="sm" className="mt-3">
+                  <Button variant="outline" size="sm" className="mt-3" onClick={handleNewActivity}>
                     <Plus className="h-4 w-4 mr-2" />
                     Adicionar Atividade
                   </Button>
@@ -263,9 +284,43 @@ export const ActivityCalendar = () => {
                           {getStatusIcon(activity.status)}
                           <h4 className="font-medium text-sm">{activity.title}</h4>
                         </div>
-                        <Badge className={`text-xs ${getPriorityColor(activity.priority)}`}>
-                          {activity.priority}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-xs ${getPriorityColor(activity.priority)}`}>
+                            {activity.priority === 'low' ? 'Baixa' : activity.priority === 'medium' ? 'Média' : 'Alta'}
+                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditActivity(activity)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              {activity.status !== 'completed' && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(activity.id, 'completed')}>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Marcar como Concluída
+                                </DropdownMenuItem>
+                              )}
+                              {activity.status !== 'in_progress' && activity.status !== 'completed' && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(activity.id, 'in_progress')}>
+                                  <Clock className="h-4 w-4 mr-2" />
+                                  Marcar como Em Andamento
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => handleArchiveActivity(activity.id)}
+                                className="text-destructive"
+                              >
+                                <Archive className="h-4 w-4 mr-2" />
+                                Arquivar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {activity.description}
@@ -273,9 +328,12 @@ export const ActivityCalendar = () => {
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {activity.estimatedTime}
+                          {activity.estimated_time ? `${activity.estimated_time}h` : 'Sem estimativa'}
                         </span>
-                        <span className="capitalize">{activity.status.replace("-", " ")}</span>
+                        <span className="capitalize">
+                          {activity.status === 'pending' ? 'Pendente' : 
+                           activity.status === 'in_progress' ? 'Em andamento' : 'Concluída'}
+                        </span>
                       </div>
                     </div>
                   </Card>
@@ -290,6 +348,13 @@ export const ActivityCalendar = () => {
           )}
         </CardContent>
       </Card>
+
+      <ActivityModal
+        open={activityModalOpen}
+        onOpenChange={setActivityModalOpen}
+        activity={editingActivity}
+        onSuccess={handleActivitySuccess}
+      />
     </div>
   );
 };
