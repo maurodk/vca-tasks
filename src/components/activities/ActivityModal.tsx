@@ -329,7 +329,11 @@ export function ActivityModal({ open, onOpenChange, activity, onSuccess }: Activ
                           min="1"
                           placeholder="Ex: 2"
                           className="pl-10"
-                          {...field}
+                          value={field.value || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(value === '' ? undefined : Number(value));
+                          }}
                         />
                       </div>
                     </FormControl>
