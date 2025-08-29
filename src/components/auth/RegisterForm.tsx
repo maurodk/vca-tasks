@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
 
@@ -14,6 +15,7 @@ const registerSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
   confirmPassword: z.string(),
+  sectorId: z.string().min(1, 'Selecione um setor'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas não coincidem',
   path: ['confirmPassword'],
@@ -32,17 +34,36 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [invitationData, setInvitationData] = useState<any>(null);
+  const [sectors, setSectors] = useState<any[]>([]);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
+    watch,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
 
+  const sectorId = watch('sectorId');
+
   useEffect(() => {
+    // Fetch sectors for registration
+    const fetchSectors = async () => {
+      try {
+        const { data } = await supabase
+          .from('sectors')
+          .select('id, name, description')
+          .order('name');
+        setSectors(data || []);
+      } catch (err) {
+        console.error('Error fetching sectors:', err);
+      }
+    };
+
+    fetchSectors();
+
     if (token) {
       // Validate invitation token
       const validateToken = async () => {
@@ -66,6 +87,7 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
 
           setInvitationData(data);
           setValue('email', data.email);
+          setValue('sectorId', data.sector_id);
         } catch (err) {
           setError('Erro ao validar convite');
         }
@@ -94,6 +116,7 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: data.fullName,
+            sector_id: token ? invitationData?.sector_id : data.sectorId,
           },
         },
       });
@@ -185,6 +208,27 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
         )}
       </div>
 
+      {!token && (
+        <div className="space-y-2">
+          <Label htmlFor="sectorId">Setor</Label>
+          <Select value={sectorId} onValueChange={(value) => setValue('sectorId', value)}>
+            <SelectTrigger className={errors.sectorId ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Selecione seu setor" />
+            </SelectTrigger>
+            <SelectContent>
+              {sectors.map((sector) => (
+                <SelectItem key={sector.id} value={sector.id}>
+                  {sector.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.sectorId && (
+            <p className="text-sm text-destructive">{errors.sectorId.message}</p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label htmlFor="password">Senha</Label>
         <div className="relative">
@@ -252,7 +296,7 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
 
       {!token && (
         <p className="text-sm text-muted-foreground text-center">
-          Você precisa de um convite para se registrar no sistema.
+          Registre-se para começar a usar o TaskFlow.
         </p>
       )}
     </form>

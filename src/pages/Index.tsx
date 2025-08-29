@@ -1,12 +1,45 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ActivityCalendar } from "@/components/calendar/ActivityCalendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CheckCircle, Clock, Circle, AlertTriangle } from "lucide-react";
 import { useActivities } from "@/hooks/useActivities";
+import { useAuth } from "@/hooks/useAuth";
+import { useAuthStore } from "@/stores/authStore";
 
 const Index = () => {
+  const { profile, loading: authLoading } = useAuth();
+  const { signOut } = useAuthStore();
   const { activities, loading } = useActivities();
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show profile incomplete state
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4 max-w-md">
+          <h1 className="text-2xl font-bold">Perfil Incompleto</h1>
+          <p className="text-muted-foreground">
+            Seu perfil não foi criado corretamente. Entre em contato com o administrador ou tente fazer login novamente.
+          </p>
+          <Button onClick={signOut} variant="outline">
+            Sair e Tentar Novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const stats = {
     pending: activities.filter(a => a.status === 'pending').length,
