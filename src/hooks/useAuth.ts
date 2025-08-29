@@ -25,25 +25,32 @@ export const useAuth = () => {
                 .from('profiles')
                 .select('*')
                 .eq('id', session.user.id)
-                .single();
+                .maybeSingle();
 
-              if (error) throw error;
+              if (error) {
+                console.error('Error fetching profile:', error);
+                if (mounted) setProfile(null);
+                return;
+              }
+
               if (mounted) {
                 setProfile(profileData);
                 
-                // Fetch notifications
-                const { data: notifications } = await supabase
-                  .from('notifications')
-                  .select('*')
-                  .eq('user_id', session.user.id)
-                  .order('created_at', { ascending: false });
+                // Only fetch notifications if profile exists
+                if (profileData) {
+                  const { data: notifications } = await supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false });
 
-                if (notifications && mounted) {
-                  setNotifications(notifications);
+                  if (notifications && mounted) {
+                    setNotifications(notifications);
+                  }
                 }
               }
             } catch (error) {
-              console.error('Error fetching profile:', error);
+              console.error('Error in profile fetch:', error);
               if (mounted) setProfile(null);
             }
           }, 0);
