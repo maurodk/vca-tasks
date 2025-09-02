@@ -1,33 +1,40 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { Database } from "@/types/supabase";
 
-export interface Activity {
-  id: string;
-  title: string;
-  description: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'archived';
-  priority: 'low' | 'medium' | 'high';
-  estimated_time: number | null;
-  due_date: string | null;
-  completed_at: string | null;
-  user_id: string;
-  sector_id: string;
-  subsector_id: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  // Join fields
-  profiles?: any;
-  subsectors?: any;
-}
+// 1. Tipo 'Activity' aprimorado e derivado do Supabase
+type ActivityRow = Database["public"]["Tables"]["activities"]["Row"];
+type SubtaskRow = Database["public"]["Tables"]["subtasks"]["Row"];
+type ProfileData = Pick<
+  Database["public"]["Tables"]["profiles"]["Row"],
+  "full_name" | "avatar_url"
+>;
+type SubsectorData = Pick<
+  Database["public"]["Tables"]["subsectors"]["Row"],
+  "name"
+>;
+
+export type Subtask = SubtaskRow;
+
+export type Activity = ActivityRow & {
+  profiles?: ProfileData | null;
+  subsectors?: SubsectorData | null;
+  subtasks?: Subtask[];
+};
+
+// 2. Tipo 'ActivityStatus' derivado diretamente do Enum do DB
+type ActivityStatus = Database["public"]["Enums"]["activity_status"];
 
 interface UseActivitiesOptions {
   subsectorId?: string;
   userId?: string;
-  status?: Array<'pending' | 'in_progress' | 'completed' | 'archived'>;
+  status?: ActivityStatus[];
+  includeArchived?: boolean; // Nova opção para incluir arquivadas
 }
+
+export type { UseActivitiesOptions };
 
 export function useActivities(options: UseActivitiesOptions = {}) {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -44,140 +51,239 @@ export function useActivities(options: UseActivitiesOptions = {}) {
 
     try {
       let query = supabase
-        .from('activities')
-        .select(`
+        .from("activities")
+        .select(
+          `
           *,
-          profiles:user_id (full_name, email),
-          subsectors:subsector_id (name)
-        `)
-        .eq('sector_id', profile.sector_id)
-        .order('created_at', { ascending: false });
+          profiles (
+            full_name,
+            avatar_url
+          ),
+          subsectors (
+            name
+          ),
+          subtasks (
+            id,
+            activity_id,
+            title,
+            description,
+            is_completed,
+            order_index,
+            created_at,
+            updated_at
+          )
+        `
+        )
+        .eq("sector_id", profile.sector_id)
+        .order("created_at", { ascending: false });
 
-      // Apply filters
+      // Aplicar filtros baseados no role e opções
       if (options.subsectorId) {
-        query = query.eq('subsector_id', options.subsectorId);
+        query = query.eq("subsector_id", options.subsectorId);
+      } else if (profile.role === "collaborator" && profile.subsector_id) {
+        // Colaboradores veem apenas atividades do seu subsetor
+        query = query.eq("subsector_id", profile.subsector_id);
       }
 
       if (options.userId) {
-        query = query.eq('user_id', options.userId);
+        query = query.eq("user_id", options.userId);
       }
 
       if (options.status && options.status.length > 0) {
-        query = query.in('status', options.status as any);
+        query = query.in("status", options.status);
+      } else if (!options.includeArchived) {
+        // Por padrão, excluir atividades arquivadas
+        query = query.neq("status", "archived");
       }
 
-      const { data, error } = await query;
+      const { data, error: fetchError } = await query;
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
 
-      setActivities((data as any) || []);
-    } catch (err: any) {
-      setError(err.message);
+      // Conversão usando unknown primeiro
+      setActivities((data as unknown as Activity[]) || []);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message);
       toast({
         title: "Erro ao carregar atividades",
-        description: err.message,
+        description: error.message,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [profile?.sector_id, options.subsectorId, options.userId, options.status, toast]);
+  }, [
+    profile?.sector_id,
+    profile?.role,
+    profile?.subsector_id,
+    options,
+    toast,
+  ]);
 
-  const updateActivityStatus = useCallback(async (activityId: string, status: Activity['status']) => {
-    try {
-      const updateData: any = { status };
-      
-      if (status === 'completed') {
-        updateData.completed_at = new Date().toISOString();
-      } else {
-        updateData.completed_at = null;
+  const updateActivityStatus = useCallback(
+    async (activityId: string, status: ActivityStatus) => {
+      try {
+        const updateData: Partial<ActivityRow> & { status: ActivityStatus } = {
+          status,
+        };
+
+        if (status === "completed") {
+          updateData.completed_at = new Date().toISOString();
+        } else {
+          updateData.completed_at = null;
+        }
+
+        const { data, error } = await supabase
+          .from("activities")
+          .update(updateData)
+          .eq("id", activityId)
+          .select();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data || data.length === 0) {
+          throw new Error(
+            "Nenhuma linha foi atualizada. Verifique se você tem permissão para editar esta atividade."
+          );
+        }
+
+        // Update local state
+        setActivities((prev) => {
+          const updatedActivities = prev.map((activity) =>
+            activity.id === activityId
+              ? { ...activity, ...updateData }
+              : activity
+          );
+
+          // Se a atividade foi arquivada e não estamos incluindo arquivadas, remover da lista
+          if (status === "archived" && !options.includeArchived) {
+            return updatedActivities.filter(
+              (activity) => activity.id !== activityId
+            );
+          }
+
+          return updatedActivities;
+        });
+
+        toast({
+          title: "Atividade atualizada",
+          description: `Status alterado para ${getStatusLabel(status)}.`,
+        });
+      } catch (err: unknown) {
+        const error = err as Error;
+        toast({
+          title: "Erro ao atualizar atividade",
+          description: error.message,
+          variant: "destructive",
+        });
       }
+    },
+    [toast, options.includeArchived]
+  );
 
-      const { error } = await supabase
-        .from('activities')
-        .update(updateData)
-        .eq('id', activityId);
+  const archiveActivity = useCallback(
+    async (activityId: string) => {
+      return updateActivityStatus(activityId, "archived");
+    },
+    [updateActivityStatus]
+  );
 
-      if (error) throw error;
+  const deleteActivity = useCallback(
+    async (activityId: string) => {
+      try {
+        const { error } = await supabase
+          .from("activities")
+          .delete()
+          .eq("id", activityId);
 
-      // Update local state
-      setActivities(prev => 
-        prev.map(activity => 
-          activity.id === activityId 
-            ? { ...activity, ...updateData }
-            : activity
-        )
-      );
+        if (error) throw error;
 
-      toast({
-        title: "Atividade atualizada",
-        description: `Status alterado para ${getStatusLabel(status)}.`,
-      });
+        // Update local state immediately after success
+        setActivities((prev) =>
+          prev.filter((activity) => activity.id !== activityId)
+        );
 
-    } catch (err: any) {
-      toast({
-        title: "Erro ao atualizar atividade",
-        description: err.message,
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
+        toast({
+          title: "Atividade excluída",
+          description: "A atividade foi excluída permanentemente.",
+        });
+      } catch (err: unknown) {
+        const error = err as Error;
+        toast({
+          title: "Erro ao excluir atividade",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    },
+    [toast]
+  );
 
-  const archiveActivity = useCallback(async (activityId: string) => {
-    return updateActivityStatus(activityId, 'archived');
-  }, [updateActivityStatus]);
-
-  const deleteActivity = useCallback(async (activityId: string) => {
-    try {
-      const { error } = await supabase
-        .from('activities')
-        .delete()
-        .eq('id', activityId);
-
-      if (error) throw error;
-
-      // Update local state
-      setActivities(prev => prev.filter(activity => activity.id !== activityId));
-
-      toast({
-        title: "Atividade excluída",
-        description: "A atividade foi excluída permanentemente.",
-      });
-
-    } catch (err: any) {
-      toast({
-        title: "Erro ao excluir atividade",
-        description: err.message,
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
-
-  // Set up real-time subscription
+  // Set up real-time subscription - Otimizado para melhor performance
   useEffect(() => {
     if (!profile?.sector_id) return;
 
-    const channel = supabase
-      .channel('activities_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'activities',
-          filter: `sector_id=eq.${profile.sector_id}`,
-        },
-        () => {
-          // Refetch activities when there are changes
-          fetchActivities();
-        }
-      )
-      .subscribe();
+    // Não usar subscription para atividades arquivadas para evitar refetch
+    if (options.status?.includes("archived" as ActivityStatus)) {
+      return;
+    }
+
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let debounceTimeout: NodeJS.Timeout;
+
+    const setupSubscription = () => {
+      channel = supabase
+        .channel(`activities_changes_${profile.sector_id}_${Math.random()}`) // Adicionar random para evitar conflitos
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "activities",
+            filter: `sector_id=eq.${profile.sector_id}`,
+          },
+          (payload) => {
+            if (mounted) {
+              console.log("Real-time event recebido:", payload.eventType);
+
+              // Debounce mais longo para evitar múltiplas chamadas
+              clearTimeout(debounceTimeout);
+              debounceTimeout = setTimeout(() => {
+                if (mounted) {
+                  fetchActivities();
+                }
+              }, 2000); // 2 segundos de debounce
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (mounted) {
+            console.log("Subscription status:", status);
+          }
+        });
+    };
+
+    // Delay na criação da subscription para evitar múltiplas simultâneas
+    const subscriptionTimeout = setTimeout(() => {
+      if (mounted) {
+        setupSubscription();
+      }
+    }, 1000);
 
     return () => {
-      supabase.removeChannel(channel);
+      mounted = false;
+      clearTimeout(debounceTimeout);
+      clearTimeout(subscriptionTimeout);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [profile?.sector_id, fetchActivities]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.sector_id, options.status]); // fetchActivities é estável
 
   // Initial fetch
   useEffect(() => {
@@ -195,12 +301,12 @@ export function useActivities(options: UseActivitiesOptions = {}) {
   };
 }
 
-function getStatusLabel(status: Activity['status']): string {
-  const statusLabels = {
-    pending: 'Pendente',
-    in_progress: 'Em andamento',
-    completed: 'Concluída',
-    archived: 'Arquivada',
+function getStatusLabel(status: ActivityStatus): string {
+  const statusLabels: Record<ActivityStatus, string> = {
+    pending: "Pendente",
+    in_progress: "Em andamento",
+    completed: "Concluída",
+    archived: "Arquivada",
   };
   return statusLabels[status];
 }

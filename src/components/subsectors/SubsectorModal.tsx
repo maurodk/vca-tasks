@@ -26,8 +26,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const subsectorSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório").max(100, "Nome deve ter no máximo 100 caracteres"),
-  description: z.string().max(500, "Descrição deve ter no máximo 500 caracteres").optional(),
+  name: z
+    .string()
+    .min(1, "Nome é obrigatório")
+    .max(100, "Nome deve ter no máximo 100 caracteres"),
+  description: z
+    .string()
+    .max(500, "Descrição deve ter no máximo 500 caracteres")
+    .optional(),
 });
 
 type SubsectorFormData = z.infer<typeof subsectorSchema>;
@@ -38,7 +44,11 @@ interface SubsectorModalProps {
   onSubsectorCreated?: () => void;
 }
 
-export function SubsectorModal({ open, onOpenChange, onSubsectorCreated }: SubsectorModalProps) {
+export function SubsectorModal({
+  open,
+  onOpenChange,
+  onSubsectorCreated,
+}: SubsectorModalProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -63,13 +73,11 @@ export function SubsectorModal({ open, onOpenChange, onSubsectorCreated }: Subse
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('subsectors')
-        .insert({
-          name: data.name,
-          description: data.description || null,
-          sector_id: profile.sector_id,
-        });
+      const { error } = await supabase.from("subsectors").insert({
+        name: data.name,
+        description: data.description || null,
+        sector_id: profile.sector_id,
+      });
 
       if (error) throw error;
 
@@ -81,10 +89,13 @@ export function SubsectorModal({ open, onOpenChange, onSubsectorCreated }: Subse
       form.reset();
       onSubsectorCreated?.();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Erro ao criar subsetor",
-        description: error.message || "Ocorreu um erro inesperado.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro inesperado.",
         variant: "destructive",
       });
     } finally {
@@ -141,9 +152,9 @@ export function SubsectorModal({ open, onOpenChange, onSubsectorCreated }: Subse
             />
 
             <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
               >

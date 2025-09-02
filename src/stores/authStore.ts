@@ -1,15 +1,16 @@
-import { create } from 'zustand';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { create } from "zustand";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Profile {
   id: string;
   email: string;
   full_name: string;
   avatar_url?: string;
-  role: 'manager' | 'collaborator';
+  role: "manager" | "collaborator";
   sector_id?: string;
   subsector_id?: string;
+  is_approved?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -49,7 +50,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error;
       set({ user: null, session: null, profile: null });
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error("Error signing out:", error);
     }
   },
 }));

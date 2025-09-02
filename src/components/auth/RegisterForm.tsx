@@ -1,40 +1,61 @@
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye, EyeOff, Loader2, CheckCircle, Mail } from "lucide-react";
 
-const registerSchema = z.object({
-  fullName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  confirmPassword: z.string(),
-  sectorId: z.string().min(1, 'Selecione um setor'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Senhas não coincidem',
-  path: ['confirmPassword'],
-});
+const registerSchema = z
+  .object({
+    fullName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    email: z.string().email("Email inválido"),
+    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    confirmPassword: z.string(),
+    sectorId: z.string().min(1, "Selecione um setor"),
+    subsectorId: z.string().min(1, "Selecione um subsetor"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Senhas não coincidem",
+    path: ["confirmPassword"],
+  });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-interface RegisterFormProps {
-  token?: string;
-}
-
-export const RegisterForm = ({ token }: RegisterFormProps) => {
+export const RegisterForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [invitationData, setInvitationData] = useState<any>(null);
-  const [sectors, setSectors] = useState<any[]>([]);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string>("");
+  const [emailResent, setEmailResent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [sectors, setSectors] = useState<
+    Array<{
+      id: string;
+      name: string;
+      description?: string;
+    }>
+  >([]);
+  const [subsectors, setSubsectors] = useState<
+    Array<{
+      id: string;
+      name: string;
+      sector_id: string;
+    }>
+  >([]);
 
   const {
     register,
@@ -44,71 +65,116 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
     watch,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      subsectorId: "",
+    },
   });
 
-  const sectorId = watch('sectorId');
+  const sectorId = watch("sectorId");
+  const subsectorId = watch("subsectorId");
 
   useEffect(() => {
     // Fetch sectors for registration
     const fetchSectors = async () => {
       try {
         const { data } = await supabase
-          .from('sectors')
-          .select('id, name, description')
-          .order('name');
+          .from("sectors")
+          .select("id, name, description")
+          .order("name");
         setSectors(data || []);
       } catch (err) {
-        console.error('Error fetching sectors:', err);
+        console.error("Error fetching sectors:", err);
       }
     };
 
     fetchSectors();
+  }, []);
 
-    if (token) {
-      // Validate invitation token
-      const validateToken = async () => {
-        try {
-          const { data, error } = await supabase
-            .from('invitations')
-            .select(`
-              *,
-              sectors(name),
-              subsectors(name)
-            `)
-            .eq('token', token)
-            .is('used_at', null)
-            .gt('expires_at', new Date().toISOString())
-            .single();
+  useEffect(() => {
+    // Fetch subsectors when sector changes
+    const fetchSubsectors = async () => {
+      if (!sectorId) {
+        setSubsectors([]);
+        setValue("subsectorId", "");
+        return;
+      }
 
-          if (error || !data) {
-            setError('Convite inválido ou expirado');
-            return;
-          }
+      try {
+        const { data, error } = await supabase
+          .from("subsectors")
+          .select("id, name, sector_id")
+          .eq("sector_id", sectorId)
+          .order("name");
 
-          setInvitationData(data);
-          setValue('email', data.email);
-          setValue('sectorId', data.sector_id);
-        } catch (err) {
-          setError('Erro ao validar convite');
+        if (error) {
+          console.error("Error fetching subsectors:", error);
+          setSubsectors([]);
+          return;
         }
-      };
 
-      validateToken();
+        setSubsectors(data || []);
+
+        // Clear subsector selection when sector changes
+        setValue("subsectorId", "");
+      } catch (err) {
+        console.error("Error fetching subsectors:", err);
+        setSubsectors([]);
+      }
+    };
+
+    fetchSubsectors();
+  }, [sectorId, setValue]);
+
+  // Cooldown timer for resend button
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => {
+        setResendCooldown((prev) => prev - 1);
+      }, 1000);
     }
-  }, [token, setValue]);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  const resendConfirmationEmail = async () => {
+    if (!registeredEmail || resendCooldown > 0) return;
+
+    setResendingEmail(true);
+    setError(null);
+    setEmailResent(false);
+
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: registeredEmail,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (error) {
+        setError(`Erro ao reenviar email: ${error.message}`);
+      } else {
+        setEmailResent(true);
+        setResendCooldown(60); // 60 seconds cooldown
+      }
+    } catch (err) {
+      setError("Erro inesperado ao reenviar email. Tente novamente.");
+      console.error("Resend email error:", err);
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
     setError(null);
 
     try {
-      if (token && !invitationData) {
-        setError('Convite inválido');
-        return;
-      }
-
       const redirectUrl = `${window.location.origin}/`;
-      
+
       const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -116,24 +182,30 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: data.fullName,
-            sector_id: token ? invitationData?.sector_id : data.sectorId,
+            sector_id: data.sectorId,
+            subsector_id:
+              data.subsectorId && data.subsectorId !== "none"
+                ? data.subsectorId
+                : null,
+            is_pending: true, // Marca como pendente de aprovação
           },
         },
       });
 
       if (error) {
-        if (error.message.includes('User already registered')) {
-          setError('Este email já está registrado');
+        if (error.message.includes("User already registered")) {
+          setError("Este email já está registrado");
         } else {
           setError(error.message);
         }
         return;
       }
 
+      setRegisteredEmail(data.email);
       setSuccess(true);
     } catch (err) {
-      setError('Erro inesperado. Tente novamente.');
-      console.error('Register error:', err);
+      setError("Erro inesperado. Tente novamente.");
+      console.error("Register error:", err);
     } finally {
       setLoading(false);
     }
@@ -146,18 +218,51 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
         <div>
           <h3 className="text-lg font-semibold">Registro realizado!</h3>
           <p className="text-muted-foreground">
-            Verifique seu email para confirmar sua conta.
+            Verifique seu email ({registeredEmail}) para confirmar sua conta.
+            Após a confirmação, um gestor irá aprovar seu acesso.
           </p>
+          {emailResent && (
+            <Alert className="mt-4">
+              <Mail className="h-4 w-4" />
+              <AlertDescription className="text-green-600">
+                Email de confirmação reenviado com sucesso!
+              </AlertDescription>
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
-      </div>
-    );
-  }
 
-  if (token && !invitationData && !error) {
-    return (
-      <div className="text-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-muted-foreground mt-2">Validando convite...</p>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Não recebeu o email?</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resendConfirmationEmail}
+            disabled={resendingEmail || resendCooldown > 0}
+          >
+            {resendingEmail ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Reenviando...
+              </>
+            ) : resendCooldown > 0 ? (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Aguarde {resendCooldown}s
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Reenviar email de confirmação
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -170,23 +275,13 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
         </Alert>
       )}
 
-      {invitationData && (
-        <Alert>
-          <AlertDescription>
-            Você foi convidado para o setor <strong>{invitationData.sectors?.name}</strong> 
-            {invitationData.subsectors && (
-              <>, subsetor <strong>{invitationData.subsectors.name}</strong></>
-            )} como <strong>{invitationData.role === 'manager' ? 'Gestor' : 'Colaborador'}</strong>.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="space-y-2">
         <Label htmlFor="fullName">Nome Completo</Label>
         <Input
           id="fullName"
           placeholder="Seu nome completo"
-          {...register('fullName')}
+          className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70"
+          {...register("fullName")}
           disabled={loading}
         />
         {errors.fullName && (
@@ -200,31 +295,67 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
           id="email"
           type="email"
           placeholder="seu@email.com"
-          {...register('email')}
-          disabled={loading || !!token}
+          className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70"
+          {...register("email")}
+          disabled={loading}
         />
         {errors.email && (
           <p className="text-sm text-destructive">{errors.email.message}</p>
         )}
       </div>
 
-      {!token && (
+      <div className="space-y-2">
+        <Label htmlFor="sectorId">Setor</Label>
+        <Select
+          value={sectorId}
+          onValueChange={(value) => setValue("sectorId", value)}
+        >
+          <SelectTrigger
+            className={`focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70 ${
+              errors.sectorId ? "border-destructive" : ""
+            }`}
+          >
+            <SelectValue placeholder="Selecione seu setor" />
+          </SelectTrigger>
+          <SelectContent>
+            {sectors.map((sector) => (
+              <SelectItem key={sector.id} value={sector.id}>
+                {sector.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.sectorId && (
+          <p className="text-sm text-destructive">{errors.sectorId.message}</p>
+        )}
+      </div>
+
+      {/* Mostrar sempre o campo de subsetor quando um setor for selecionado */}
+      {sectorId && (
         <div className="space-y-2">
-          <Label htmlFor="sectorId">Setor</Label>
-          <Select value={sectorId} onValueChange={(value) => setValue('sectorId', value)}>
-            <SelectTrigger className={errors.sectorId ? 'border-destructive' : ''}>
-              <SelectValue placeholder="Selecione seu setor" />
+          <Label htmlFor="subsectorId">Subsetor</Label>
+          <Select
+            value={subsectorId || ""}
+            onValueChange={(value) => setValue("subsectorId", value)}
+          >
+            <SelectTrigger className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70">
+              <SelectValue placeholder="Selecione um subsetor" />
             </SelectTrigger>
             <SelectContent>
-              {sectors.map((sector) => (
-                <SelectItem key={sector.id} value={sector.id}>
-                  {sector.name}
+              {subsectors.map((subsector) => (
+                <SelectItem key={subsector.id} value={subsector.id}>
+                  {subsector.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {errors.sectorId && (
-            <p className="text-sm text-destructive">{errors.sectorId.message}</p>
+          {errors.subsectorId && (
+            <p className="text-xs text-red-600">{errors.subsectorId.message}</p>
+          )}
+          {subsectors.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum subsetor disponível para este setor
+            </p>
           )}
         </div>
       )}
@@ -234,9 +365,10 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
         <div className="relative">
           <Input
             id="password"
-            type={showPassword ? 'text' : 'password'}
+            type={showPassword ? "text" : "password"}
             placeholder="Sua senha"
-            {...register('password')}
+            className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70"
+            {...register("password")}
             disabled={loading}
           />
           <Button
@@ -264,9 +396,10 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
         <div className="relative">
           <Input
             id="confirmPassword"
-            type={showConfirmPassword ? 'text' : 'password'}
+            type={showConfirmPassword ? "text" : "password"}
             placeholder="Confirme sua senha"
-            {...register('confirmPassword')}
+            className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]/20 focus-visible:border-[#09b230]/70"
+            {...register("confirmPassword")}
             disabled={loading}
           />
           <Button
@@ -285,20 +418,25 @@ export const RegisterForm = ({ token }: RegisterFormProps) => {
           </Button>
         </div>
         {errors.confirmPassword && (
-          <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+          <p className="text-sm text-destructive">
+            {errors.confirmPassword.message}
+          </p>
         )}
       </div>
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={loading}
+        style={{ backgroundColor: "#09b230", borderColor: "#09b230" }}
+      >
         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {token ? 'Finalizar Registro' : 'Registrar'}
+        Registrar
       </Button>
 
-      {!token && (
-        <p className="text-sm text-muted-foreground text-center">
-          Registre-se para começar a usar o TaskFlow.
-        </p>
-      )}
+      <p className="text-sm text-muted-foreground text-center">
+        Registre-se para começar a usar o TaskFlow.
+      </p>
     </form>
   );
 };

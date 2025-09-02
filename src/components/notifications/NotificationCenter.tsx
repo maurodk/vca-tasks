@@ -1,23 +1,41 @@
-import { useState, useEffect } from 'react';
-import { Bell, Check, CheckCheck } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+import { useState, useEffect } from "react";
+import { Bell, Check, CheckCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+} from "@/components/ui/popover";
+import { useNotificationStore } from "@/stores/notificationStore";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface DbNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  read: boolean;
+  related_activity_id?: string;
+  created_at: string;
+}
 
 export const NotificationCenter = () => {
   const { user } = useAuth();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, setNotifications, addNotification } = useNotificationStore();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    setNotifications,
+    addNotification,
+  } = useNotificationStore();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -25,17 +43,17 @@ export const NotificationCenter = () => {
 
     // Set up real-time subscription for new notifications
     const channel = supabase
-      .channel('notifications')
+      .channel("notifications")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          addNotification(payload.new as any);
+          addNotification(payload.new as DbNotification);
         }
       )
       .subscribe();
@@ -43,10 +61,10 @@ export const NotificationCenter = () => {
     // Fetch initial notifications
     const fetchNotifications = async () => {
       const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
         .limit(50);
 
       if (data) {
@@ -64,47 +82,47 @@ export const NotificationCenter = () => {
   const handleMarkAsRead = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('notifications')
+        .from("notifications")
         .update({ read: true })
-        .eq('id', id);
+        .eq("id", id);
 
       if (!error) {
         markAsRead(id);
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error("Error marking notification as read:", error);
     }
   };
 
   const handleMarkAllAsRead = async () => {
     try {
-      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
-      
+      const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+
       if (unreadIds.length === 0) return;
 
       const { error } = await supabase
-        .from('notifications')
+        .from("notifications")
         .update({ read: true })
-        .in('id', unreadIds);
+        .in("id", unreadIds);
 
       if (!error) {
         markAllAsRead();
       }
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      console.error("Error marking all notifications as read:", error);
     }
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'assignment':
-        return '📋';
-      case 'completed':
-        return '✅';
-      case 'overdue':
-        return '⚠️';
+      case "assignment":
+        return "📋";
+      case "completed":
+        return "✅";
+      case "overdue":
+        return "⚠️";
       default:
-        return '📢';
+        return "📢";
     }
   };
 
@@ -118,7 +136,7 @@ export const NotificationCenter = () => {
               variant="destructive"
               className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
             >
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
         </Button>
@@ -149,7 +167,7 @@ export const NotificationCenter = () => {
                 <div key={notification.id}>
                   <div
                     className={`p-3 hover:bg-muted/50 cursor-pointer ${
-                      !notification.read ? 'bg-muted/30' : ''
+                      !notification.read ? "bg-muted/30" : ""
                     }`}
                     onClick={() => handleMarkAsRead(notification.id)}
                   >
@@ -170,10 +188,13 @@ export const NotificationCenter = () => {
                           {notification.message}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(notification.created_at), {
-                            addSuffix: true,
-                            locale: ptBR,
-                          })}
+                          {formatDistanceToNow(
+                            new Date(notification.created_at),
+                            {
+                              addSuffix: true,
+                              locale: ptBR,
+                            }
+                          )}
                         </p>
                       </div>
                     </div>

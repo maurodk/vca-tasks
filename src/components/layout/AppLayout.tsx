@@ -1,23 +1,22 @@
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Header } from "@/components/layout/Header";
+import { Outlet } from "react-router-dom";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
-interface AppLayoutProps {
-  children: React.ReactNode;
-}
-
-export const AppLayout = ({ children }: AppLayoutProps) => {
+export function AppLayout() {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+    <SidebarProvider defaultOpen={true}>
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background to-background/95">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex flex-col flex-1">
           <Header />
-          <main className="flex-1 p-6 overflow-auto">
-            {children}
+          <main className="flex-1 p-6 lg:p-8 overflow-auto">
+            <div className="max-w-7xl mx-auto space-y-6">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>
     </SidebarProvider>
   );
-};
+}
