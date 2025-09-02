@@ -7,11 +7,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Save, Loader2, Shield, Users, Building2 } from "lucide-react";
+import { Save, Loader2, Shield, Users, Building2, Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,7 +32,17 @@ const profileSchema = z.object({
   fullName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
 });
 
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, "Senha atual é obrigatória"),
+  newPassword: z.string().min(6, "Nova senha deve ter pelo menos 6 caracteres"),
+  confirmPassword: z.string().min(1, "Confirmação de senha é obrigatória"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "As senhas não coincidem",
+  path: ["confirmPassword"],
+});
+
 type ProfileFormData = z.infer<typeof profileSchema>;
+type PasswordFormData = z.infer<typeof passwordSchema>;
 
 const Profile = () => {
   const { profile } = useAuth();
@@ -32,6 +50,11 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [sectorName, setSectorName] = useState<string | null>(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -42,6 +65,15 @@ const Profile = () => {
     defaultValues: {
       fullName: profile?.full_name || "",
     },
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handleSubmitPassword,
+    formState: { errors: passwordErrors },
+    reset: resetPasswordForm,
+  } = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
   });
 
   // Fetch sector information
@@ -178,6 +210,47 @@ const Profile = () => {
     }
   };
 
+  const onPasswordSubmit = async (data: PasswordFormData) => {
+    setPasswordLoading(true);
+
+    try {
+      // Verificar senha atual fazendo login temporário
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: data.currentPassword,
+      });
+
+      if (signInError) {
+        throw new Error("Senha atual incorreta");
+      }
+
+      // Alterar senha
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: data.newPassword,
+      });
+
+      if (updateError) throw updateError;
+
+      setShowPasswordModal(false);
+      resetPasswordForm();
+      
+      toast({
+        title: "Senha alterada",
+        description: "Sua senha foi alterada com sucesso.",
+      });
+    } catch (error: unknown) {
+      console.error("Error updating password:", error);
+      const errorMessage = error instanceof Error ? error.message : "Não foi possível alterar a senha.";
+      toast({
+        title: "Erro",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -305,12 +378,132 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button
-              variant="outline"
-              className="w-full border-[#09b230] text-[#09b230] hover:bg-[#09b230] hover:text-white"
-            >
-              Alterar Senha
-            </Button>
+            <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full border-[#09b230] text-[#09b230] hover:bg-[#09b230] hover:text-white"
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  Alterar Senha
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Alterar Senha</DialogTitle>
+                  <DialogDescription>
+                    Digite sua senha atual e escolha uma nova senha segura.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmitPassword(onPasswordSubmit)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Senha Atual</Label>
+                    <div className="relative">
+                      <Input
+                        id="currentPassword"
+                        type={showCurrentPassword ? "text" : "password"}
+                        placeholder="Digite sua senha atual"
+                        {...registerPassword("currentPassword")}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      >
+                        {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {passwordErrors.currentPassword && (
+                      <p className="text-sm text-red-500">{passwordErrors.currentPassword.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">Nova Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="Digite sua nova senha"
+                        {...registerPassword("newPassword")}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {passwordErrors.newPassword && (
+                      <p className="text-sm text-red-500">{passwordErrors.newPassword.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirme sua nova senha"
+                        {...registerPassword("confirmPassword")}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {passwordErrors.confirmPassword && (
+                      <p className="text-sm text-red-500">{passwordErrors.confirmPassword.message}</p>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowPasswordModal(false);
+                        resetPasswordForm();
+                      }}
+                      disabled={passwordLoading}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={passwordLoading}
+                      className="bg-[#09b230] hover:bg-[#08a02c]"
+                    >
+                      {passwordLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Alterando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Alterar Senha
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
             <p className="text-sm text-muted-foreground">
               Recomendamos alterar sua senha periodicamente para manter sua
               conta segura.
