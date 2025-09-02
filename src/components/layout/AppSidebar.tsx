@@ -114,7 +114,7 @@ export function AppSidebar() {
           <div className="flex justify-center w-full">
             <img
               src={getLogoSrc()}
-              alt="Week Flow Hub"
+              alt="VCA TASKS"
               className="w-full h-auto max-w-[220px] object-contain"
             />
           </div>

@@ -59,7 +59,7 @@ serve(async (req) => {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Convite para Week Flow Hub</title>
+          <title>Convite para VCA TASKS</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -84,11 +84,11 @@ serve(async (req) => {
               <h1>🎉 Você foi convidado!</h1>
             </div>
             <div class="content">
-              <h2>Bem-vindo ao Week Flow Hub</h2>
+              <h2>Bem-vindo ao VCA TASKS</h2>
               <p>Olá!</p>
-              <p><strong>${inviterName}</strong> convidou você para fazer parte da equipe do <strong>${subsectorName}</strong> no Week Flow Hub.</p>
+              <p><strong>${inviterName}</strong> convidou você para fazer parte da equipe do <strong>${subsectorName}</strong> no VCA TASKS.</p>
               
-              <p>O Week Flow Hub é nossa plataforma de gestão de atividades onde você poderá:</p>
+              <p>O VCA TASKS é nossa plataforma de gestão de atividades onde você poderá:</p>
               <ul>
                 <li>✅ Gerenciar suas atividades diárias</li>
                 <li>📅 Acompanhar prazos e entregas</li>
@@ -110,7 +110,7 @@ serve(async (req) => {
               </p>
             </div>
             <div class="footer">
-              <p>Este email foi enviado automaticamente pelo Week Flow Hub</p>
+              <p>Este email foi enviado automaticamente pelo VCA TASKS</p>
               <p>Se você não esperava receber este convite, pode ignorar este email.</p>
             </div>
           </div>
@@ -119,15 +119,15 @@ serve(async (req) => {
     `;
 
     const emailText = `
-Você foi convidado para o Week Flow Hub!
+Você foi convidado para o VCA TASKS!
 
-${inviterName} convidou você para fazer parte da equipe do ${subsectorName} no Week Flow Hub.
+${inviterName} convidou você para fazer parte da equipe do ${subsectorName} no VCA TASKS.
 
 Para aceitar o convite e criar sua conta, acesse: ${inviteLink}
 
 ⚠️ Este convite expira em 7 dias.
 
-Week Flow Hub - Sistema de Gestão de Atividades
+VCA TASKS - Sistema de Gestão de Atividades
     `;
 
     console.log("📤 Sending email via Resend API...");
@@ -139,9 +139,9 @@ Week Flow Hub - Sistema de Gestão de Atividades
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Week Flow Hub <onboarding@resend.dev>",
+        from: "VCA TASKS <onboarding@resend.dev>",
         to: [email],
-        subject: `🎉 Convite para Week Flow Hub - ${subsectorName}`,
+        subject: `🎉 Convite para VCA TASKS - ${subsectorName}`,
         html: emailHtml,
         text: emailText,
       }),

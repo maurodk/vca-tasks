@@ -318,6 +318,22 @@ const Profile = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Assinatura do Desenvolvedor */}
+      <div className="mt-8 pt-6 border-t border-border/30">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground/60 mb-2">Developed By:</p>
+          <div className="relative">
+            <p className="text-lg font-serif italic text-muted-foreground/80 tracking-wide">
+              Carlos Mauricio Jr.
+            </p>
+            <div className="h-px bg-gradient-to-r from-transparent via-muted-foreground/20 to-transparent mt-2 mx-auto max-w-xs"></div>
+          </div>
+          <p className="text-xs text-muted-foreground/50 mt-2">
+            Full Stack Developer
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
