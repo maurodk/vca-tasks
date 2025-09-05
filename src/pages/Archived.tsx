@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SmoothTransition } from "@/components/ui/smooth-transition";
 import { SkeletonCard, SkeletonContent } from "@/components/ui/skeleton-card";
-import { ActivityDetailModal } from "@/components/activities/ActivityDetailModal";
+import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import {
   Archive,
   FileText,
@@ -38,6 +38,7 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Activity } from "@/hooks/useActivities";
 import { ArchivedActivity } from "@/hooks/useArchivedActivities";
+import { useActivityOperations } from "@/hooks/useActivityOperations";
 
 export function Archived() {
   const { profile } = useAuth();
@@ -46,10 +47,52 @@ export function Archived() {
     null
   );
   const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const { updateActivity } = useActivityOperations();
 
   // Usando o hook específico para atividades arquivadas
   const { activities, loading, deleteActivity, unarchiveActivity } =
     useArchivedActivities();
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectMode(false);
+  };
+
+  const allSelectedOnDate = (dateKey: string, items: ArchivedActivity[]) =>
+    items.every((a) => selectedIds.has(a.id));
+
+  const toggleSelectGroup = (items: ArchivedActivity[]) => {
+    const allSelected = items.every((a) => selectedIds.has(a.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        items.forEach((a) => next.delete(a.id));
+      } else {
+        items.forEach((a) => next.add(a.id));
+      }
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      // sequential to avoid overload
+      await deleteActivity(id);
+    }
+    clearSelection();
+  };
 
   const handleDeleteActivity = async (
     activityId: string,
@@ -124,14 +167,52 @@ export function Archived() {
             </p>
           </div>
         </div>
-        <Badge variant="secondary" className="ml-auto">
-          {activities.length}{" "}
-          {activities.length === 1 ? "atividade" : "atividades"}
-        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant="secondary">
+            {activities.length}{" "}
+            {activities.length === 1 ? "atividade" : "atividades"}
+          </Badge>
+          <Button
+            variant={selectMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectMode((v) => !v)}
+          >
+            {selectMode ? "Sair da seleção" : "Selecionar"}
+          </Button>
+          {selectMode && selectedIds.size > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Excluir selecionadas ({selectedIds.size})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Excluir atividades selecionadas
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação removerá permanentemente {selectedIds.size}{" "}
+                    atividade(s). Deseja continuar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={bulkDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
       {activities.length === 0 ? (
-        <Card>
+        <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">
@@ -157,12 +238,23 @@ export function Archived() {
                     {dayActivities.length}{" "}
                     {dayActivities.length === 1 ? "atividade" : "atividades"}
                   </Badge>
+                  {selectMode && (
+                    <label className="ml-2 inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={allSelectedOnDate(dateKey, dayActivities)}
+                        onChange={() => toggleSelectGroup(dayActivities)}
+                      />
+                      Selecionar todas
+                    </label>
+                  )}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {dayActivities.map((activity) => (
                     <Card
                       key={activity.id}
-                      className="relative hover-transition animate-fade-in"
+                      className="relative hover-transition animate-fade-in dark:bg-[#161616] dark:border-gray-800"
                     >
                       <CardHeader>
                         <div className="flex justify-between items-start">
@@ -176,6 +268,15 @@ export function Archived() {
                             </CardDescription>
                           </div>
                           <div className="flex gap-1">
+                            {selectMode && (
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 mt-2"
+                                checked={selectedIds.has(activity.id)}
+                                onChange={() => toggleSelect(activity.id)}
+                                title="Selecionar atividade"
+                              />
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -302,14 +403,31 @@ export function Archived() {
       </SmoothTransition>
 
       {activityModalOpen && selectedActivity && (
-        <ActivityDetailModal
+        <ActivityEditModal
           activity={selectedActivity}
-          open={activityModalOpen}
-          onOpenChange={(open) => {
-            setActivityModalOpen(open);
-            if (!open) setSelectedActivity(null);
+          isOpen={activityModalOpen}
+          onClose={() => {
+            setActivityModalOpen(false);
+            setSelectedActivity(null);
           }}
-          onRefresh={() => {
+          onSave={async (partial) => {
+            // Permitir editar campos; se status sair de 'archived', ele some da lista
+            await updateActivity({
+              id: selectedActivity.id,
+              title: partial.title,
+              description: partial.description,
+              due_date: partial.due_date as string | undefined,
+              priority: partial.priority as Activity["priority"] | undefined,
+              status: partial.status as Activity["status"] | undefined,
+              user_id: partial.user_id,
+              is_private: (partial as unknown as { is_private?: boolean })
+                .is_private,
+            });
+            setActivityModalOpen(false);
+            setSelectedActivity(null);
+          }}
+          onDelete={async (id) => {
+            await handleDeleteActivity(id, selectedActivity.title);
             setActivityModalOpen(false);
             setSelectedActivity(null);
           }}

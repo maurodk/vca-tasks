@@ -1,125 +1,220 @@
-import { Database } from "@/types/supabase";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { SubtaskPreview } from "@/components/activities/SubtaskPreview";
 import { Activity } from "@/hooks/useActivities";
+import { format } from "date-fns";
+import { Calendar, Clock, User, CheckSquare, Tag } from "lucide-react";
 
 interface ActivityCardProps {
   activity: Activity;
-  onClick?: () => void; // Nova prop para o clique
+  onClick?: () => void;
 }
 
 export function ActivityCard({ activity, onClick }: ActivityCardProps) {
-  const getPriorityBadgeVariant = (priority: string | null) => {
-    switch (priority) {
-      case "high":
-        return "destructive";
-      case "medium":
-        return "secondary";
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border-green-200 dark:border-green-700";
+      case "in_progress":
+        return "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-700";
+      case "archived":
+        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600";
       default:
-        return "outline";
+        return "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700";
     }
   };
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 border-red-200 dark:border-red-700";
+      case "medium":
+        return "bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-700";
+      case "low":
+        return "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border-green-200 dark:border-green-700";
+      default:
+        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "Concluída";
+      case "in_progress":
+        return "Em Andamento";
+      case "pending":
+        return "Pendente";
+      case "archived":
+        return "Arquivada";
+      default:
+        return status;
+    }
+  };
+
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "Alta";
+      case "medium":
+        return "Média";
+      case "low":
+        return "Baixa";
+      default:
+        return priority;
+    }
+  };
+
+  // Agrupar subtasks por grupo de checklist (se tiver)
+  const checklistGroups =
+    activity.subtasks?.reduce(
+      (groups: { [key: string]: typeof activity.subtasks }, subtask) => {
+        const groupName = subtask.checklist_group || "Checklist";
+        if (!groups[groupName]) {
+          groups[groupName] = [];
+        }
+        groups[groupName].push(subtask);
+        return groups;
+      },
+      {}
+    ) || {};
+
+  const totalSubtasks = activity.subtasks?.length || 0;
+  const completedSubtasks =
+    activity.subtasks?.filter((s) => s.is_completed).length || 0;
+
   return (
-    <Card
-      className="cursor-pointer hover:shadow-lg transition-all duration-200"
-      style={{
-        backgroundColor: "var(--background)",
-        borderColor: "var(--border)",
-        color: "var(--foreground)",
-      }}
-      onClick={onClick}
-    >
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg text-gray-900 dark:text-white">
+    <div className="p-3 cursor-pointer group" onClick={onClick}>
+      {/* Título + marcador de privacidade */}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           {activity.title}
-        </CardTitle>
-        <CardDescription className="text-gray-600 dark:text-gray-300">
-          {activity.profiles?.full_name && (
-            <span>Responsável: {activity.profiles.full_name}</span>
-          )}
-          {!activity.profiles?.full_name && (
-            <span>Responsável: Não atribuído</span>
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-gray-700 dark:text-gray-400 line-clamp-2">
-          {activity.description}
-        </p>
-
-        {/* Preview de progresso das subtarefas */}
-        {activity.subtasks && activity.subtasks.length > 0 && (
-          <div className="bg-gray-100 dark:bg-gray-800/50 rounded-lg p-3 space-y-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-600 dark:text-gray-400 font-medium">
-                Subtarefas
-              </span>
-              <span className="text-[#09b230] font-semibold">
-                {activity.subtasks.filter((s) => s.is_completed).length}/
-                {activity.subtasks.length}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-[#09b230] h-2 rounded-full transition-all duration-300"
-                style={{
-                  width: `${
-                    activity.subtasks.length > 0
-                      ? (activity.subtasks.filter((s) => s.is_completed)
-                          .length /
-                          activity.subtasks.length) *
-                        100
-                      : 0
-                  }%`,
-                }}
-              />
-            </div>
-            <div className="text-xs text-center text-gray-600 dark:text-gray-400">
-              {Math.round(
-                activity.subtasks.length > 0
-                  ? (activity.subtasks.filter((s) => s.is_completed).length /
-                      activity.subtasks.length) *
-                      100
-                  : 0
-              )}
-              % concluído
-            </div>
-          </div>
+        </h4>
+        {((activity as unknown as { is_private?: boolean }).is_private ??
+          false) && (
+          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+            Privada
+          </span>
         )}
+      </div>
 
-        <div className="flex justify-between items-center pt-1">
-          <div className="flex gap-2">
-            <Badge
-              variant="default"
-              className="bg-[#09b230] hover:bg-[#08a02b] text-white dark:bg-[#09b230] dark:text-white"
+      {/* Tags/Labels */}
+      {(activity.priority || activity.status) && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {activity.priority && (
+            <span
+              className={`px-2 py-1 rounded text-xs font-medium border ${getPriorityColor(
+                activity.priority
+              )}`}
             >
-              {activity.status}
-            </Badge>
-            {activity.priority && (
-              <Badge
-                variant={getPriorityBadgeVariant(activity.priority)}
-                className="dark:text-white"
-              >
-                {activity.priority}
-              </Badge>
-            )}
-          </div>
-          {activity.due_date && (
-            <span className="text-xs text-gray-600 dark:text-gray-400">
-              Vence em: {format(new Date(activity.due_date), "dd/MM/yyyy")}
+              {getPriorityLabel(activity.priority)}
             </span>
           )}
+          <span
+            className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
+              activity.status
+            )}`}
+          >
+            {getStatusLabel(activity.status)}
+          </span>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Data de vencimento */}
+      {activity.due_date && (
+        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
+          <Calendar className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+          <span>{format(new Date(activity.due_date), "dd/MM")}</span>
+        </div>
+      )}
+
+      {/* Checklist Groups Preview */}
+      {totalSubtasks > 0 && (
+        <div className="space-y-2 mb-2">
+          {Object.entries(checklistGroups).map(([groupName, subtasks]) => {
+            const groupCompleted = subtasks.filter(
+              (s) => s.is_completed
+            ).length;
+            const groupTotal = subtasks.length;
+            const percentage = (groupCompleted / groupTotal) * 100;
+            const isComplete = groupCompleted === groupTotal;
+
+            return (
+              <div
+                key={groupName}
+                className="bg-gray-50 dark:bg-[#0f0f0f] dark:border dark:border-gray-800 rounded-md p-2"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckSquare
+                    className={`h-3 w-3 ${
+                      isComplete ? "text-green-600" : "text-gray-500"
+                    }`}
+                  />
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 flex-1">
+                    {groupName}
+                  </span>
+                  <span
+                    className={`text-xs font-bold ${
+                      isComplete
+                        ? "text-green-600"
+                        : "text-gray-600 dark:text-gray-400"
+                    }`}
+                  >
+                    {groupCompleted}/{groupTotal}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      isComplete ? "bg-green-500" : "bg-blue-500"
+                    }`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+
+                {/* Preview dos primeiros itens */}
+                <div className="mt-1 space-y-0.5">
+                  {subtasks.slice(0, 2).map((subtask) => (
+                    <div
+                      key={subtask.id}
+                      className="flex items-center gap-1.5 text-xs"
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          subtask.is_completed
+                            ? "bg-green-500"
+                            : "bg-gray-300 dark:bg-gray-600"
+                        }`}
+                      />
+                      <span
+                        className={`truncate ${
+                          subtask.is_completed
+                            ? "line-through text-gray-500 dark:text-gray-500"
+                            : "text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {subtask.title}
+                      </span>
+                    </div>
+                  ))}
+                  {subtasks.length > 2 && (
+                    <div className="text-xs text-gray-500 dark:text-gray-500 pl-3">
+                      +{subtasks.length - 2} itens
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Usuário responsável */}
+      {activity.profiles && (
+        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+          <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+          <span>{activity.profiles.full_name || "Usuário"}</span>
+        </div>
+      )}
+    </div>
   );
 }

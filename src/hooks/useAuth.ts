@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { useNotificationStore } from "@/stores/notificationStore";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 export const useAuth = () => {
   const { user, session, profile, loading, setAuth, setProfile, setLoading } =

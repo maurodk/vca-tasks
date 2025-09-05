@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { Activity } from "@/hooks/useOptimizedActivities";
@@ -9,63 +9,91 @@ export function useIndexActivities() {
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
-  useEffect(() => {
+  const fetchActivities = useCallback(async () => {
     if (!profile?.sector_id) return;
 
-    const fetchActivities = async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-          .from("activities")
-          .select(
-            `
-            *,
-            profiles:user_id (
-              full_name,
-              avatar_url
-            ),
-            subsectors (
-              name
-            )
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("activities")
+        .select(
           `
+          *,
+          profiles:user_id (
+            full_name,
+            avatar_url
+          ),
+          subsectors (
+            name
+          ),
+          subtasks (
+            id,
+            title,
+            is_completed,
+            checklist_group,
+            order_index
           )
-          .eq("sector_id", profile.sector_id)
-          .neq("status", "archived")
-          .order("created_at", { ascending: false });
+        `
+        )
+        .eq("sector_id", profile.sector_id)
+        .neq("status", "archived")
+        .order("created_at", { ascending: false });
 
-        // Filtro para colaboradores
-        if (profile.role === "collaborator" && profile.subsector_id) {
-          query = query.eq("subsector_id", profile.subsector_id);
-        }
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        setActivities((data as unknown as Activity[]) || []);
-      } catch (error) {
-        console.error("Erro ao carregar atividades:", error);
-        setActivities([]);
-      } finally {
-        setLoading(false);
+      // Filtro para colaboradores
+      if (profile.role === "collaborator" && profile.subsector_id) {
+        // Para colaboradores: ver atividades do seu subsetor OU atividades criadas por você (inclui listas privadas)
+        // Simplificado para evitar erros de sintaxe do PostgREST ao combinar NOT NULL dentro de OR.
+        query = query.or(
+          `subsector_id.eq.${profile.subsector_id},created_by.eq.${profile.id}`
+        );
+      } else if (profile.id) {
+        // Gestores: excluir cartões de listas privadas de OUTROS usuários
+        // Mantém: (list_id IS NULL) OR (list_id NOT NULL AND created_by == current user)
+        query = query.or(
+          `list_id.is.null,and(list_id.not.is.null,created_by.eq.${profile.id})`
+        );
       }
-    };
 
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      setActivities((data as unknown as Activity[]) || []);
+    } catch (error) {
+      console.error("Erro ao carregar atividades:", error);
+      setActivities([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.sector_id, profile?.role, profile?.subsector_id, profile?.id]);
+  useEffect(() => {
     fetchActivities();
 
     // Real-time subscription apenas para esta instância
     const channel = supabase
-      .channel(`index_activities_${profile.sector_id}`)
+      .channel(`index_activities_${profile?.sector_id}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "activities",
-          filter: `sector_id=eq.${profile.sector_id}`,
+          filter: `sector_id=eq.${profile?.sector_id}`,
         },
         () => {
           // Refetch após mudanças
+          fetchActivities();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "subtasks",
+        },
+        () => {
+          // Refetch após mudanças nas subtasks também
           fetchActivities();
         }
       )
@@ -74,7 +102,7 @@ export function useIndexActivities() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.sector_id, profile?.role, profile?.subsector_id]);
+  }, [fetchActivities, profile?.sector_id]);
 
-  return { activities, loading };
+  return { activities, loading, refetch: fetchActivities };
 }

@@ -22,9 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useActivities, Activity } from "@/hooks/useActivities";
-import { ActivityModal } from "@/components/activities/ActivityModal";
+import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { ActivityDetailModal } from "@/components/activities/ActivityDetailModal";
 import { isSameDay } from "date-fns";
+import { useActivityOperations } from "@/hooks/useActivityOperations";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DayData {
   date: Date;
@@ -63,6 +65,8 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
     archiveActivity,
     refetch,
   } = useActivities(options);
+  const { createActivity, updateActivity } = useActivityOperations();
+  const { profile } = useAuth();
   const today = new Date();
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
@@ -249,6 +253,51 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
     }, 100);
   };
 
+  const handleSaveActivity = async (partial: Partial<Activity>) => {
+    type Priority = Activity["priority"];
+    type Status = Activity["status"];
+    const maybePrivate = (partial as unknown as { is_private?: boolean })
+      .is_private;
+    if (!editingActivity) {
+      // Create
+      const targetSubsectorId = subsectorId || profile?.subsector_id;
+      if (!targetSubsectorId) {
+        // No possible subsector; just bail and close
+        setActivityModalOpen(false);
+        return;
+      }
+
+      await createActivity({
+        title: partial.title || "",
+        description: partial.description,
+        subsector_id: targetSubsectorId,
+        due_date: partial.due_date as string | undefined,
+        priority: partial.priority as Priority | undefined,
+        status: (partial.status as Status) || "pending",
+        user_id: partial.user_id,
+        is_private: maybePrivate,
+      });
+
+      handleActivitySuccess();
+      setActivityModalOpen(false);
+    } else {
+      // Update
+      await updateActivity({
+        id: editingActivity.id,
+        title: partial.title,
+        description: partial.description,
+        due_date: partial.due_date as string | undefined,
+        priority: partial.priority as Priority | undefined,
+        status: partial.status as Status | undefined,
+        user_id: partial.user_id,
+        is_private: maybePrivate,
+      });
+
+      handleActivitySuccess();
+      setActivityModalOpen(false);
+    }
+  };
+
   const handleStatusChange = async (
     activityId: string,
     newStatus: Activity["status"]
@@ -265,7 +314,7 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
   return (
     <div className="flex gap-6">
       {/* Calendário Principal */}
-      <Card className="flex-1">
+      <Card className="flex-1 dark:bg-[#0f0f0f]">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl font-bold">
@@ -384,7 +433,7 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
       </Card>
 
       {/* Painel lateral - Detalhes do dia */}
-      <Card className="w-96">
+      <Card className="w-96 dark:bg-[#0f0f0f]">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">
@@ -413,7 +462,7 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
         </CardHeader>
         <CardContent>
           {selectedDay ? (
-            <div className="space-y-4">
+            <div className="space-y-4 ">
               {selectedDay.activities.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Circle className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -452,7 +501,7 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
                       }`}
                     />
 
-                    <div className="p-5">
+                    <div className="p-5 dark:bg-[#1f1f1f]">
                       {/* Header com título e ações */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -718,14 +767,16 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
         </CardContent>
       </Card>
 
-      <ActivityModal
-        open={activityModalOpen}
-        onOpenChange={setActivityModalOpen}
+      <ActivityEditModal
         activity={editingActivity}
-        onSuccess={handleActivitySuccess}
-        defaultSubsectorId={subsectorId}
+        isOpen={activityModalOpen}
+        onClose={() => setActivityModalOpen(false)}
+        onSave={handleSaveActivity}
+        onDelete={async (id) => {
+          await archiveActivity(id);
+          handleActivitySuccess();
+        }}
         defaultDueDate={defaultActivityDate}
-        onRefresh={refetch}
       />
 
       <ActivityDetailModal

@@ -33,11 +33,17 @@ export function SearchDropdown({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
-        return <CheckCircle className="h-4 w-4 text-[#09b230]" />;
+        return (
+          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+        );
       case "in_progress":
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return (
+          <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+        );
       case "pending":
-        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+        return (
+          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        );
       default:
         return <Clock className="h-4 w-4 text-gray-500" />;
     }
@@ -59,11 +65,11 @@ export function SearchDropdown({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-[#09b230]/10 text-[#09b230] border-[#09b230]/30";
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800";
       case "in_progress":
-        return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
+        return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800";
       case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
+        return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-800";
     }
@@ -72,7 +78,7 @@ export function SearchDropdown({
   if (!searchQuery) return null;
 
   return (
-    <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border/50 rounded-lg shadow-2xl z-[9999] max-h-96 overflow-y-auto backdrop-blur-md ring-1 ring-black/5">
+    <div className="dark:bg-[#0f0f0f] absolute top-full left-0 right-0 mt-2 bg-card border border-border/50 rounded-lg shadow-2xl z-[9999] max-h-96 overflow-y-auto backdrop-blur-md ring-1 ring-black/5">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-border/50">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

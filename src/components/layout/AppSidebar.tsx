@@ -31,7 +31,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { SubsectorModal } from "@/components/subsectors/SubsectorModal";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -107,10 +107,13 @@ export function AppSidebar() {
     setShowSubsectorModal(false);
   };
   return (
-    <Sidebar className="border-r border-border bg-card" collapsible="offcanvas">
-      <SidebarContent className="p-2">
+    <Sidebar
+      className="border-r border-gray-200 dark:border-gray-800 bg-card dark:bg-[#1f1f1f]"
+      collapsible="offcanvas"
+    >
+      <SidebarContent className="p-2 ">
         {/* Logo */}
-        <div className="px-2 py-4 border-b border-border mb-4 flex justify-center">
+        <div className="px-2 py-4 border-b border-gray-200 dark:border-gray-800 mb-4 flex justify-center">
           <div className="flex justify-center w-full">
             <img
               src={getLogoSrc()}
@@ -128,18 +131,11 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild className="h-10">
                   <NavLink to="/" className={getNavCls}>
                     <Home className="h-4 w-4" />
-                    <span className="ml-2">Dashboard</span>
+                    <span className="ml-2">Pagina Inicial</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild className="h-10">
-                  <NavLink to="/my-activities" className={getNavCls}>
-                    <Activity className="h-4 w-4" />
-                    <span className="ml-2">Minhas Atividades</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/** removed MyActivities from sidebar */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild className="h-10">
                   <NavLink to="/archived" className={getNavCls}>
@@ -156,7 +152,7 @@ export function AppSidebar() {
                       className={getNavCls}
                     >
                       <Users className="h-4 w-4" />
-                      <span className="ml-2">Gestão de Colaboradores</span>
+                      <span className="ml-2">Gestão de Equipe</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

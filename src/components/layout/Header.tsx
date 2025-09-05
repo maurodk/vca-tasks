@@ -6,7 +6,7 @@ import { NotificationCenter } from "@/components/notifications/NotificationCente
 import { UserMenu } from "@/components/layout/UserMenu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { SearchDropdown } from "@/components/layout/SearchDropdown";
-import { ActivityModal } from "@/components/activities/ActivityModal";
+import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { ActivityHistoryModal } from "@/components/activities/ActivityHistoryModal";
 import { useActivitySearch, SearchActivity } from "@/hooks/useActivitySearch";
 import {
@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef, useEffect } from "react";
 import { Database } from "@/integrations/supabase/types";
+import { useActivityOperations } from "@/hooks/useActivityOperations";
 
 export const Header = () => {
   const {
@@ -34,6 +35,7 @@ export const Header = () => {
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const { updateActivity, archiveActivity } = useActivityOperations();
 
   const handleActivitySelect = async (activity: SearchActivity) => {
     // Converter SearchActivity para Activity completa
@@ -53,6 +55,8 @@ export const Header = () => {
       updated_at: activity.updated_at,
       completed_at: activity.completed_at,
       estimated_time: activity.estimated_time,
+      is_private:
+        (activity as unknown as { is_private?: boolean }).is_private ?? false,
       profiles: activity.profiles,
       subsectors: activity.subsectors,
       subtasks: [],
@@ -80,7 +84,7 @@ export const Header = () => {
   }, []);
 
   return (
-    <header className="h-16 border-b border-border/60 bg-card/40 backdrop-blur-md flex items-center justify-between px-6 glass-effect z-50 relative">
+    <header className="h-16 border-b border-border/60 bg-card/40 dark:bg-[#1f1f1f]/80 backdrop-blur-md flex items-center justify-between px-6 z-50 relative">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors" />
         <div className="relative max-w-md z-[60]" ref={searchContainerRef}>
@@ -90,7 +94,7 @@ export const Header = () => {
             value={searchQuery}
             onChange={(e) => updateSearchQuery(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
-            className="pl-10 w-80 bg-background/60 backdrop-blur-sm border-border/50 placeholder:text-muted-foreground/70 hover:border-border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09b230]/20 focus-visible:ring-offset-0 focus-visible:border-[#09b230]/70"
+            className="dark:bg-[#0f0f0f] pl-10 w-80 bg-background/60 backdrop-blur-sm border-border/50 placeholder:text-muted-foreground/70 hover:border-border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09b230]/20 focus-visible:ring-offset-0 focus-visible:border-[#09b230]/70"
           />
           {(isSearchFocused || searchQuery) && (
             <SearchDropdown
@@ -122,15 +126,35 @@ export const Header = () => {
         <UserMenu />
       </div>
 
-      {activityModalOpen && selectedActivity && (
-        <ActivityModal
+      {activityModalOpen && (
+        <ActivityEditModal
           activity={selectedActivity}
-          open={activityModalOpen}
-          onOpenChange={(open) => {
-            setActivityModalOpen(open);
-            if (!open) setSelectedActivity(null);
+          isOpen={activityModalOpen}
+          onClose={() => {
+            setActivityModalOpen(false);
+            setSelectedActivity(null);
           }}
-          onSuccess={async () => {
+          onSave={async (partial) => {
+            if (!selectedActivity) return;
+            type Priority = Activity["priority"];
+            type Status = Activity["status"];
+            await updateActivity({
+              id: selectedActivity.id,
+              title: partial.title,
+              description: partial.description,
+              due_date: partial.due_date as string | undefined,
+              priority: partial.priority as Priority | undefined,
+              status: partial.status as Status | undefined,
+              user_id: partial.user_id,
+              is_private: (partial as unknown as { is_private?: boolean })
+                .is_private,
+            });
+            await refetch();
+            setActivityModalOpen(false);
+            setSelectedActivity(null);
+          }}
+          onDelete={async (id) => {
+            await archiveActivity(id);
             await refetch();
             setActivityModalOpen(false);
             setSelectedActivity(null);

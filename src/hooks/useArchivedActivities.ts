@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export function useArchivedActivities() {
   const [error, setError] = useState<string | null>(null);
   const { profile } = useAuth();
   const { toast } = useToast();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchArchivedActivities = useCallback(async () => {
     if (!profile?.sector_id) return;
@@ -38,7 +39,7 @@ export function useArchivedActivities() {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from("activities")
         .select(
           `
@@ -55,6 +56,15 @@ export function useArchivedActivities() {
         .eq("sector_id", profile.sector_id)
         .eq("status", "archived")
         .order("created_at", { ascending: false });
+
+      if (profile.role === "collaborator" && profile.subsector_id) {
+        // Colaborador: ver arquivadas do seu subsetor OU quaisquer atividades criadas por ele (inclui privadas)
+        query = query.or(
+          `subsector_id.eq.${profile.subsector_id},created_by.eq.${profile.id}`
+        );
+      }
+
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
@@ -152,6 +162,35 @@ export function useArchivedActivities() {
   useEffect(() => {
     fetchArchivedActivities();
   }, [fetchArchivedActivities]);
+
+  // Subscription em tempo real: atualizar quando atividades mudarem
+  useEffect(() => {
+    if (!profile?.sector_id) return;
+
+    const channel = supabase
+      .channel(`archived_activities_${profile.sector_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "activities",
+          filter: `sector_id=eq.${profile.sector_id}`,
+        },
+        () => {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => {
+            fetchArchivedActivities();
+          }, 400);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.sector_id, fetchArchivedActivities]);
 
   // SEM subscription em tempo real para evitar refetch automático
 

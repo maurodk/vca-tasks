@@ -21,6 +21,8 @@ export type Database = {
           due_date: string | null;
           estimated_time: number | null;
           id: string;
+          is_private: boolean;
+          list_id: string | null;
           priority: Database["public"]["Enums"]["activity_priority"];
           sector_id: string;
           status: Database["public"]["Enums"]["activity_status"];
@@ -37,6 +39,8 @@ export type Database = {
           due_date?: string | null;
           estimated_time?: number | null;
           id?: string;
+          is_private?: boolean;
+          list_id?: string | null;
           priority?: Database["public"]["Enums"]["activity_priority"];
           sector_id: string;
           status?: Database["public"]["Enums"]["activity_status"];
@@ -53,6 +57,8 @@ export type Database = {
           due_date?: string | null;
           estimated_time?: number | null;
           id?: string;
+          is_private?: boolean;
+          list_id?: string | null;
           priority?: Database["public"]["Enums"]["activity_priority"];
           sector_id?: string;
           status?: Database["public"]["Enums"]["activity_status"];
@@ -88,6 +94,48 @@ export type Database = {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      personal_lists: {
+        Row: {
+          id: string;
+          user_id: string;
+          sector_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          sector_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          sector_id?: string;
+          name?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "personal_lists_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "personal_lists_sector_id_fkey";
+            columns: ["sector_id"];
+            isOneToOne: false;
+            referencedRelation: "sectors";
             referencedColumns: ["id"];
           }
         ];
@@ -273,6 +321,7 @@ export type Database = {
           description: string | null;
           id: string;
           is_completed: boolean | null;
+          checklist_group: string | null;
           order_index: number;
           title: string;
           updated_at: string;
@@ -283,6 +332,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           is_completed?: boolean | null;
+          checklist_group?: string | null;
           order_index?: number;
           title?: string;
           updated_at?: string;
@@ -293,6 +343,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           is_completed?: boolean | null;
+          checklist_group?: string | null;
           order_index?: number;
           title?: string;
           updated_at?: string;

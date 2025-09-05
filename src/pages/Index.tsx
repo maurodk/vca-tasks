@@ -1,20 +1,113 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityCalendar } from "@/components/calendar/ActivityCalendar";
+import { ActivityCard } from "@/components/activities/ActivityCard";
+import { PersonalListsBoard } from "@/components/activities/PersonalListsBoard";
+import { SubsectorCards } from "@/components/activities/SubsectorCards";
+import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
+import { Subtask } from "@/hooks/useActivities";
 import {
   CheckCircle,
   Clock,
   Circle,
   AlertTriangle,
   Calendar,
+  LayoutGrid,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useIndexActivities } from "@/hooks/useIndexActivities";
 import { useAuth } from "@/hooks/useAuth";
+import { useActivityOperations } from "@/hooks/useActivityOperations";
+import { Activity } from "@/hooks/useActivities";
 
 const Index = () => {
   const { profile, loading: authLoading } = useAuth();
+  const { activities, loading, refetch } = useIndexActivities();
+  const { createActivity, updateActivity, archiveActivity } =
+    useActivityOperations();
+  const { toast } = useToast();
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+    null
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newActivitySubsector, setNewActivitySubsector] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [creatingListId, setCreatingListId] = useState<string | null>(null);
 
-  const { activities, loading } = useIndexActivities();
+  // Memoizar as datas para evitar recriação em cada render
+  const { todayStart, todayEnd } = useMemo(() => {
+    const today = new Date();
+    return {
+      todayStart: new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ),
+      todayEnd: new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1
+      ),
+    };
+  }, []);
+
+  // Conjunto de atividades realmente visíveis na Home (mesma regra do useIndexActivities)
+  const visibleActivities = useMemo(() => activities, [activities]);
+
+  const stats = useMemo(
+    () => ({
+      total: visibleActivities.length,
+      pending: visibleActivities.filter((a) => a.status === "pending").length,
+      in_progress: visibleActivities.filter((a) => a.status === "in_progress")
+        .length,
+      completed: visibleActivities.filter((a) => a.status === "completed")
+        .length,
+      today: visibleActivities.filter((a) => {
+        const createdAt = new Date(a.created_at);
+        return createdAt >= todayStart && createdAt < todayEnd;
+      }).length,
+      overdue: visibleActivities.filter((a) => {
+        if (a.status === "completed" || !a.due_date) return false;
+        return new Date(a.due_date) < new Date();
+      }).length,
+    }),
+    [visibleActivities, todayStart, todayEnd]
+  );
+
+  // Filtrar atividades baseado no filtro selecionado
+  const filteredActivities = useMemo(() => {
+    if (!selectedFilter) return activities;
+
+    switch (selectedFilter) {
+      case "pending":
+        return activities.filter((a) => a.status === "pending");
+      case "in_progress":
+        return activities.filter((a) => a.status === "in_progress");
+      case "completed":
+        return activities.filter((a) => a.status === "completed");
+      case "today":
+        return activities.filter((a) => {
+          const createdAt = new Date(a.created_at);
+          return createdAt >= todayStart && createdAt < todayEnd;
+        });
+      case "overdue":
+        return activities.filter((a) => {
+          if (a.status === "completed" || !a.due_date) return false;
+          return new Date(a.due_date) < new Date();
+        });
+      default:
+        return activities;
+    }
+  }, [activities, selectedFilter, todayStart, todayEnd]);
 
   // Show loading state while checking authentication
   if (authLoading) {
@@ -41,156 +134,326 @@ const Index = () => {
     );
   }
 
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  const todayEnd = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() + 1
-  );
+  const handleAddActivity = (subsectorId: string, subsectorName: string) => {
+    setNewActivitySubsector({ id: subsectorId, name: subsectorName });
+    setSelectedActivity(null);
+    setIsCreating(true);
+    setIsModalOpen(true);
+  };
 
-  const stats = {
-    pending: activities.filter((a) => a.status === "pending").length,
-    in_progress: activities.filter((a) => a.status === "in_progress").length,
-    completed: activities.filter((a) => a.status === "completed").length,
-    today: activities.filter((a) => {
-      const createdAt = new Date(a.created_at);
-      return createdAt >= todayStart && createdAt < todayEnd;
-    }).length,
-    overdue: activities.filter((a) => {
-      if (a.status === "completed" || !a.due_date) return false;
-      return new Date(a.due_date) < new Date();
-    }).length,
+  // Create inside personal list (no subsector)
+  const handleAddPersonalCard = (listId: string) => {
+    setCreatingListId(listId);
+    setNewActivitySubsector(null);
+    setSelectedActivity(null);
+    setIsCreating(true);
+    setIsModalOpen(true);
+  };
+
+  const handleEditActivity = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setIsCreating(false);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveActivity = async (activityData: Partial<Activity>) => {
+    if (isCreating && (newActivitySubsector || creatingListId)) {
+      // Criar nova atividade
+      const createData = {
+        title: activityData.title || "",
+        description: activityData.description,
+        subsector_id: newActivitySubsector ? newActivitySubsector.id : null,
+        due_date: activityData.due_date,
+        priority: activityData.priority,
+        status: activityData.status,
+        user_id: activityData.user_id,
+        is_private:
+          (activityData as unknown as { is_private?: boolean }).is_private ??
+          Boolean(creatingListId),
+      };
+
+      // If creating for personal list, also set list_id after creation
+      const success = await createActivity(createData);
+      if (success) {
+        if (creatingListId) {
+          await updateActivity({ id: success.id, list_id: creatingListId });
+          // Notify personal list board for instant refresh
+          window.dispatchEvent(
+            new CustomEvent("personal-list-updated", {
+              detail: { listId: creatingListId },
+            })
+          );
+        }
+        // Se a atividade foi criada e tem subtasks, salvar as subtasks
+        if (activityData.subtasks && activityData.subtasks.length > 0) {
+          await saveActivitySubtasks(success.id, activityData.subtasks);
+        }
+        // Forçar atualização imediata
+        refetch();
+        setIsModalOpen(false);
+        setNewActivitySubsector(null);
+        setCreatingListId(null);
+      }
+    } else if (selectedActivity) {
+      // Atualizar atividade existente
+      const updateData = {
+        id: selectedActivity.id,
+        title: activityData.title,
+        description: activityData.description,
+        due_date: activityData.due_date,
+        priority: activityData.priority,
+        status: activityData.status,
+        user_id: activityData.user_id,
+        is_private: (activityData as unknown as { is_private?: boolean })
+          .is_private,
+      };
+
+      const success = await updateActivity(updateData);
+      if (success) {
+        // Salvar subtasks se houver
+        if (activityData.subtasks) {
+          await saveActivitySubtasks(
+            selectedActivity.id,
+            activityData.subtasks
+          );
+        }
+        if (selectedActivity.list_id) {
+          window.dispatchEvent(
+            new CustomEvent("personal-list-updated", {
+              detail: { listId: selectedActivity.list_id },
+            })
+          );
+        }
+        // Forçar atualização imediata
+        refetch();
+        setIsModalOpen(false);
+      }
+    }
+  };
+
+  // Função para salvar subtasks
+  const saveActivitySubtasks = async (
+    activityId: string,
+    subtasks: Subtask[]
+  ) => {
+    try {
+      // Primeiro, remover todas as subtasks existentes
+      await supabase.from("subtasks").delete().eq("activity_id", activityId);
+
+      // Depois, inserir as novas subtasks
+      if (subtasks.length > 0) {
+        const subtasksToInsert = subtasks.map((subtask, index) => ({
+          activity_id: activityId,
+          title: subtask.title,
+          is_completed: subtask.is_completed,
+          order_index: index,
+          checklist_group: subtask.checklist_group || null,
+        }));
+
+        const { error } = await supabase
+          .from("subtasks")
+          .insert(subtasksToInsert);
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Erro ao salvar subtasks:", error);
+      toast({
+        title: "Erro ao salvar checklist",
+        description: "Não foi possível salvar os itens do checklist.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    await archiveActivity(activityId);
+    await refetch();
+    // Fire event for personal list boards too
+    const listId = selectedActivity?.list_id || creatingListId || null;
+    if (listId) {
+      window.dispatchEvent(
+        new CustomEvent("personal-list-updated", { detail: { listId } })
+      );
+    }
+    setIsModalOpen(false);
   };
 
   return (
-    <div className="space-y-8 animate-fade-in pb-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-in pb-8">
+      <div className="flex items-center justify-between sticky top-0 z-10 py-3">
         <div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#09b230] to-[#4ade80] bg-clip-text text-transparent">
-            Calendário de Atividades
+            Sistema de Atividades
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
-            Gerencie suas atividades semanais de forma organizada
+            Gerencie suas atividades em um board Kanban organizado por
+            subsetores
           </p>
         </div>
-      </div>
-
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        <Card className="glass-effect border-blue-300/30 hover:border-blue-300/50 transition-all duration-300 hover:scale-[1.02]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Criadas Hoje
-            </CardTitle>
-            <Calendar className="h-5 w-5 text-blue-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {loading ? "-" : stats.today}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              atividades criadas hoje
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-effect border-yellow-300/30 hover:border-yellow-300/50 transition-all duration-300 hover:scale-[1.02]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Pendentes
-            </CardTitle>
-            <Circle className="h-5 w-5 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-foreground">
-              {loading ? "-" : stats.pending}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              atividades aguardando início
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-effect border-warning/30 hover:border-warning/50 transition-all duration-300 hover:scale-[1.02]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Em Andamento
-            </CardTitle>
-            <Clock className="h-5 w-5 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-warning">
-              {loading ? "-" : stats.in_progress}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              atividades em execução
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-effect border-accent/30 hover:border-accent/50 transition-all duration-300 hover:scale-[1.02]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Concluídas
-            </CardTitle>
-            <CheckCircle className="h-5 w-5 text-accent" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-accent">
-              {loading ? "-" : stats.completed}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              atividades finalizadas
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-effect border-destructive/30 hover:border-destructive/50 transition-all duration-300 hover:scale-[1.02]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Atrasadas
-            </CardTitle>
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-destructive">
-              {loading ? "-" : stats.overdue}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              atividades vencidas
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Legenda */}
-      <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground glass-effect p-4 rounded-2xl">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-accent rounded-full shadow-sm"></div>
-          <span>Concluído</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-warning rounded-full shadow-sm"></div>
-          <span>Em andamento</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-muted-foreground rounded-full shadow-sm"></div>
-          <span>Pendente</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-destructive rounded-full shadow-sm"></div>
-          <span>Atrasado</span>
+          <Button
+            variant={showCalendar ? "default" : "outline"}
+            onClick={() => setShowCalendar(!showCalendar)}
+            className="flex items-center gap-2"
+          >
+            {showCalendar ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+            {showCalendar ? "Ocultar" : "Mostrar"} Calendário
+          </Button>
         </div>
       </div>
 
-      <div className="glass-effect rounded-3xl p-6 border border-border/50">
-        <ActivityCalendar />
+      {showCalendar && (
+        <div className="glass-effect rounded-3xl p-6 border border-border/50 dark:bg-[#0f0f0f]">
+          <div className="flex items-center gap-2 mb-6">
+            <Calendar className="h-6 w-6 text-primary" />
+            <h2 className="text-2xl font-bold">Calendário</h2>
+          </div>
+          <ActivityCalendar />
+        </div>
+      )}
+
+      {/* KPIs - Filtros Minimalistas */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={() =>
+            setSelectedFilter(selectedFilter === null ? null : null)
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === null
+              ? "bg-blue-600 dark:bg-blue-500 text-white shadow-md"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+          }`}
+        >
+          Todas ({stats.total})
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "pending" ? null : "pending")
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === "pending"
+              ? "bg-blue-500 text-white shadow-md"
+              : "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800"
+          }`}
+        >
+          Pendentes ({stats.pending})
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedFilter(
+              selectedFilter === "in_progress" ? null : "in_progress"
+            )
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === "in_progress"
+              ? "bg-yellow-500 text-white shadow-md"
+              : "bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800"
+          }`}
+        >
+          Em Andamento ({stats.in_progress})
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedFilter(
+              selectedFilter === "completed" ? null : "completed"
+            )
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === "completed"
+              ? "bg-green-500 text-white shadow-md"
+              : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800"
+          }`}
+        >
+          Concluídas ({stats.completed})
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === "overdue"
+              ? "bg-red-500 text-white shadow-md"
+              : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800"
+          }`}
+        >
+          Atrasadas ({stats.overdue})
+        </button>
+
+        <button
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "today" ? null : "today")
+          }
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+            selectedFilter === "today"
+              ? "bg-purple-500 text-white shadow-md"
+              : "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800"
+          }`}
+        >
+          Hoje ({stats.today})
+        </button>
       </div>
+
+      {/* Cartões flutuando (sem board) */}
+      <div className="min-h-[60vh]">
+        <div className="flex items-center gap-2 mb-3">
+          <LayoutGrid className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+            {selectedFilter
+              ? `Atividades (${filteredActivities.length})`
+              : `Atividades (${stats.total})`}
+          </h2>
+        </div>
+
+        <SubsectorCards
+          activities={filteredActivities}
+          onAddActivity={handleAddActivity}
+          onEditActivity={handleEditActivity}
+          hideEmpty={Boolean(selectedFilter)}
+        />
+
+        {/* Personal private boards */}
+        <PersonalListsBoard
+          onCreateCard={handleAddPersonalCard}
+          onEditCard={handleEditActivity}
+          statusFilter={
+            selectedFilter === "pending" ||
+            selectedFilter === "in_progress" ||
+            selectedFilter === "completed" ||
+            selectedFilter === "archived"
+              ? (selectedFilter as
+                  | "pending"
+                  | "in_progress"
+                  | "completed"
+                  | "archived")
+              : null
+          }
+        />
+      </div>
+
+      {/* Calendar section rendered above when toggled */}
+
+      {/* Modal de Edição */}
+      <ActivityEditModal
+        activity={isCreating ? null : selectedActivity}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setNewActivitySubsector(null);
+          setCreatingListId(null);
+          setIsCreating(false);
+        }}
+        onSave={handleSaveActivity}
+        onDelete={handleDeleteActivity}
+      />
     </div>
   );
 };

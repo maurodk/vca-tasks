@@ -16,7 +16,9 @@ type SubsectorData = Pick<
   "name"
 >;
 
-export type Subtask = SubtaskRow;
+export type Subtask = SubtaskRow & {
+  checklist_group?: string;
+};
 
 export type Activity = ActivityRow & {
   profiles?: ProfileData | null;
@@ -68,6 +70,7 @@ export function useActivities(options: UseActivitiesOptions = {}) {
             title,
             description,
             is_completed,
+            checklist_group,
             order_index,
             created_at,
             updated_at
@@ -232,12 +235,14 @@ export function useActivities(options: UseActivitiesOptions = {}) {
     }
 
     let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let activitiesChannel: ReturnType<typeof supabase.channel> | null = null;
+    let subtasksChannel: ReturnType<typeof supabase.channel> | null = null;
     let debounceTimeout: NodeJS.Timeout;
 
     const setupSubscription = () => {
-      channel = supabase
-        .channel(`activities_changes_${profile.sector_id}_${Math.random()}`) // Adicionar random para evitar conflitos
+      // Subscription para mudanças nas activities
+      const aChannel = supabase
+        .channel(`activities_changes_${profile.sector_id}_${Math.random()}`)
         .on(
           "postgres_changes",
           {
@@ -248,29 +253,69 @@ export function useActivities(options: UseActivitiesOptions = {}) {
           },
           (payload) => {
             if (mounted) {
-              console.log("Real-time event recebido:", payload.eventType);
+              console.log(
+                "Activities real-time event:",
+                payload.eventType,
+                payload
+              );
 
-              // Debounce mais longo para evitar múltiplas chamadas
               clearTimeout(debounceTimeout);
               debounceTimeout = setTimeout(() => {
                 if (mounted) {
                   fetchActivities();
                 }
-              }, 2000); // 2 segundos de debounce
+              }, 500); // Reduzir debounce para 0.5 segundos
             }
           }
         )
         .subscribe((status) => {
           if (mounted) {
-            console.log("Subscription status:", status);
+            console.log("Activities subscription status:", status);
           }
         });
+
+      // Subscription para mudanças nas subtasks
+      const sChannel = supabase
+        .channel(`subtasks_changes_${profile.sector_id}_${Math.random()}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "subtasks",
+          },
+          (payload) => {
+            if (mounted) {
+              console.log(
+                "Subtasks real-time event:",
+                payload.eventType,
+                payload
+              );
+
+              clearTimeout(debounceTimeout);
+              debounceTimeout = setTimeout(() => {
+                if (mounted) {
+                  fetchActivities();
+                }
+              }, 500); // Reduzir debounce para 0.5 segundos
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (mounted) {
+            console.log("Subtasks subscription status:", status);
+          }
+        });
+
+      return { aChannel, sChannel };
     };
 
     // Delay na criação da subscription para evitar múltiplas simultâneas
     const subscriptionTimeout = setTimeout(() => {
       if (mounted) {
-        setupSubscription();
+        const channels = setupSubscription();
+        activitiesChannel = channels.aChannel;
+        subtasksChannel = channels.sChannel;
       }
     }, 1000);
 
@@ -278,9 +323,8 @@ export function useActivities(options: UseActivitiesOptions = {}) {
       mounted = false;
       clearTimeout(debounceTimeout);
       clearTimeout(subscriptionTimeout);
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      if (activitiesChannel) supabase.removeChannel(activitiesChannel);
+      if (subtasksChannel) supabase.removeChannel(subtasksChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.sector_id, options.status]); // fetchActivities é estável

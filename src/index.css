@@ -233,19 +233,18 @@ Inspirado em Material Design 3, Notion e Linear
     --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
 
     /* 📱 Sidebar Dark */
-    --sidebar-background: 224 47% 6%;
+    --sidebar-background: 0 0% 12%;
     --sidebar-foreground: 213 27% 94%;
     --sidebar-primary: 239 84% 70%;
     --sidebar-primary-foreground: 224 71% 4%;
-    --sidebar-accent: 224 40% 12%;
+    --sidebar-accent: 0 0% 16%;
     --sidebar-accent-foreground: 213 27% 84%;
-    --sidebar-border: 224 35% 15%;
+    --sidebar-border: 0 0% 15%;
     --sidebar-ring: 239 84% 70%;
   }
 
-  /* 🖼️ Background Theme System */
-  :root:not(.dark) {
-    /* Tema Claro - Background Pattern */
+  /* 🖼️ Background Theme System - aplicado ao elemento main */
+  :root:not(.dark) main {
     background-image: url("/background.png");
     background-size: cover;
     background-position: center;
@@ -253,10 +252,12 @@ Inspirado em Material Design 3, Notion e Linear
     background-attachment: fixed;
   }
 
-  .dark {
-    /* Tema Escuro - Background Sólido */
-    background-image: none;
-    background-color: hsl(var(--background));
+  .dark main {
+    background-image: url("/backgroundblack.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
   }
 }
 

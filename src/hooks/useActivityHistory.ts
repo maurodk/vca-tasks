@@ -29,6 +29,9 @@ export interface ActivityHistoryEntry {
 interface UseActivityHistoryOptions {
   limit?: number;
   activityId?: string; // Para filtrar histórico de uma atividade específica
+  subsectorId?: string; // Filtrar por subsetor
+  dateFrom?: string; // ISO date (YYYY-MM-DD)
+  dateTo?: string; // ISO date (YYYY-MM-DD)
 }
 
 export function useActivityHistory(options: UseActivityHistoryOptions = {}) {
@@ -100,6 +103,31 @@ export function useActivityHistory(options: UseActivityHistoryOptions = {}) {
         query = query.eq("activity_id", options.activityId);
       }
 
+      // Filtro por subsetor se fornecido
+      if (options.subsectorId) {
+        const value = options.subsectorId;
+        const isUuid = /^[0-9a-fA-F-]{36}$/.test(value);
+        if (isUuid) {
+          query = query.eq("subsector_id", value);
+        } else {
+          // Filtra pelo nome do subsetor via alias da relação usado no select
+          // select usa: subsector:subsectors!subsector_id (name)
+          query = query.eq("subsector.name", value);
+        }
+      }
+
+      // Filtro por intervalo de datas
+      if (options.dateFrom) {
+        // include whole day start
+        query = query.gte("created_at", `${options.dateFrom}T00:00:00.000Z`);
+      }
+      if (options.dateTo) {
+        // include whole day end by adding one day and using lt
+        const to = new Date(options.dateTo);
+        to.setDate(to.getDate() + 1);
+        query = query.lt("created_at", to.toISOString());
+      }
+
       // Aplicar limite se fornecido
       if (options.limit) {
         query = query.limit(options.limit);
@@ -129,6 +157,9 @@ export function useActivityHistory(options: UseActivityHistoryOptions = {}) {
     profile?.subsector_id,
     options.activityId,
     options.limit,
+    options.subsectorId,
+    options.dateFrom,
+    options.dateTo,
     toast,
   ]);
 

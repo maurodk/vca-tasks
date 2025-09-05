@@ -19,11 +19,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Save, Loader2, Shield, Users, Building2, Eye, EyeOff } from "lucide-react";
+import {
+  Save,
+  Loader2,
+  Shield,
+  Users,
+  Building2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { toast } from "@/components/ui/use-toast";
 import { AvatarEditor } from "@/components/ui/avatar-editor";
@@ -32,14 +40,18 @@ const profileSchema = z.object({
   fullName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
 });
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, "Senha atual é obrigatória"),
-  newPassword: z.string().min(6, "Nova senha deve ter pelo menos 6 caracteres"),
-  confirmPassword: z.string().min(1, "Confirmação de senha é obrigatória"),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "As senhas não coincidem",
-  path: ["confirmPassword"],
-});
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Senha atual é obrigatória"),
+    newPassword: z
+      .string()
+      .min(6, "Nova senha deve ter pelo menos 6 caracteres"),
+    confirmPassword: z.string().min(1, "Confirmação de senha é obrigatória"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "As senhas não coincidem",
+    path: ["confirmPassword"],
+  });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 type PasswordFormData = z.infer<typeof passwordSchema>;
@@ -233,14 +245,17 @@ const Profile = () => {
 
       setShowPasswordModal(false);
       resetPasswordForm();
-      
+
       toast({
         title: "Senha alterada",
         description: "Sua senha foi alterada com sucesso.",
       });
     } catch (error: unknown) {
       console.error("Error updating password:", error);
-      const errorMessage = error instanceof Error ? error.message : "Não foi possível alterar a senha.";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar a senha.";
       toast({
         title: "Erro",
         description: errorMessage,
@@ -262,7 +277,7 @@ const Profile = () => {
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Picture */}
-        <Card>
+  <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
           <CardHeader>
             <CardTitle>Foto de Perfil</CardTitle>
             <CardDescription>
@@ -280,7 +295,7 @@ const Profile = () => {
         </Card>
 
         {/* Basic Information */}
-        <Card>
+  <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
           <CardHeader>
             <CardTitle>Informações Básicas</CardTitle>
             <CardDescription>
@@ -331,14 +346,14 @@ const Profile = () => {
         </Card>
 
         {/* Role & Sector */}
-        <Card>
+    <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
           <CardHeader>
             <CardTitle>Função e Setor</CardTitle>
             <CardDescription>Suas informações organizacionais</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg dark:bg-[#161616] dark:border dark:border-gray-800">
                 {profile.role === "manager" ? (
                   <Shield className="h-4 w-4 text-primary" />
                 ) : (
@@ -352,7 +367,7 @@ const Profile = () => {
 
             <div className="space-y-2">
               <Label>Setor</Label>
-              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-[#09b230]/10 to-[#09b230]/5 border border-[#09b230]/20 rounded-lg">
+      <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-[#09b230]/10 to-[#09b230]/5 border border-[#09b230]/20 rounded-lg dark:bg-[#161616] dark:border-gray-800">
                 <div className="flex items-center justify-center w-10 h-10 bg-[#09b230]/10 rounded-full">
                   <Building2 className="h-5 w-5 text-[#09b230]" />
                 </div>
@@ -370,7 +385,7 @@ const Profile = () => {
         </Card>
 
         {/* Account Security */}
-        <Card>
+    <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
           <CardHeader>
             <CardTitle>Segurança da Conta</CardTitle>
             <CardDescription>
@@ -378,7 +393,10 @@ const Profile = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+            <Dialog
+              open={showPasswordModal}
+              onOpenChange={setShowPasswordModal}
+            >
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
@@ -395,7 +413,10 @@ const Profile = () => {
                     Digite sua senha atual e escolha uma nova senha segura.
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmitPassword(onPasswordSubmit)} className="space-y-4">
+                <form
+                  onSubmit={handleSubmitPassword(onPasswordSubmit)}
+                  className="space-y-4"
+                >
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword">Senha Atual</Label>
                     <div className="relative">
@@ -411,13 +432,21 @@ const Profile = () => {
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        onClick={() =>
+                          setShowCurrentPassword(!showCurrentPassword)
+                        }
                       >
-                        {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showCurrentPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                     {passwordErrors.currentPassword && (
-                      <p className="text-sm text-red-500">{passwordErrors.currentPassword.message}</p>
+                      <p className="text-sm text-red-500">
+                        {passwordErrors.currentPassword.message}
+                      </p>
                     )}
                   </div>
 
@@ -438,16 +467,24 @@ const Profile = () => {
                         className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                         onClick={() => setShowNewPassword(!showNewPassword)}
                       >
-                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                     {passwordErrors.newPassword && (
-                      <p className="text-sm text-red-500">{passwordErrors.newPassword.message}</p>
+                      <p className="text-sm text-red-500">
+                        {passwordErrors.newPassword.message}
+                      </p>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                    <Label htmlFor="confirmPassword">
+                      Confirmar Nova Senha
+                    </Label>
                     <div className="relative">
                       <Input
                         id="confirmPassword"
@@ -461,13 +498,21 @@ const Profile = () => {
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                       >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                     {passwordErrors.confirmPassword && (
-                      <p className="text-sm text-red-500">{passwordErrors.confirmPassword.message}</p>
+                      <p className="text-sm text-red-500">
+                        {passwordErrors.confirmPassword.message}
+                      </p>
                     )}
                   </div>
 
@@ -512,17 +557,19 @@ const Profile = () => {
         </Card>
       </div>
 
-      {/* Assinatura do Desenvolvedor */}
+      {/* Assinatura do Desenvolvedor - reduzida */}
       <div className="mt-8 pt-6 border-t border-border/30">
         <div className="text-center">
-          <p className="text-sm text-muted-foreground/60 mb-2">Developed By:</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-1">
+            Developed By:
+          </p>
           <div className="relative">
-            <p className="text-lg font-serif italic text-muted-foreground/80 tracking-wide">
+            <p className="text-[12px] font-serif italic text-muted-foreground/80 tracking-wide">
               Carlos Mauricio Jr.
             </p>
             <div className="h-px bg-gradient-to-r from-transparent via-muted-foreground/20 to-transparent mt-2 mx-auto max-w-xs"></div>
           </div>
-          <p className="text-xs text-muted-foreground/50 mt-2">
+          <p className="text-[10px] text-muted-foreground/50 mt-2">
             Full Stack Developer
           </p>
         </div>

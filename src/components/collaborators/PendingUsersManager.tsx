@@ -107,7 +107,7 @@ const PendingUsersManager: React.FC = () => {
 
   const content =
     pendingUsers.length === 0 ? (
-      <Card>
+      <Card className="dark:bg-[#0f0f0f] dark:border-gray-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -128,7 +128,7 @@ const PendingUsersManager: React.FC = () => {
         </CardContent>
       </Card>
     ) : (
-      <Card>
+      <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -144,7 +144,7 @@ const PendingUsersManager: React.FC = () => {
           {pendingUsers.map((user) => (
             <div
               key={user.id}
-              className="flex items-center justify-between p-4 border rounded-lg bg-muted/50 hover-transition hover:bg-muted/70 animate-slide-in"
+              className="flex items-center justify-between p-4 border rounded-lg bg-muted/50 hover-transition hover:bg-muted/70 animate-slide-in dark:bg-[#161616] dark:border-gray-800 dark:hover:bg-[#161616]"
             >
               <div className="flex items-center space-x-4">
                 <div className="w-10 h-10 bg-[#09b230]/10 rounded-full flex items-center justify-center">

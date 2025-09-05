@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Users,
   Eye,
@@ -28,8 +28,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SmoothTransition } from "@/components/ui/smooth-transition";
+import { ActivityCard } from "@/components/activities/ActivityCard";
+import { Activity as FullActivity } from "@/hooks/useActivities";
 import { SkeletonCard, SkeletonContent } from "@/components/ui/skeleton-card";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -60,12 +62,28 @@ const ActiveCollaboratorsManager: React.FC = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [query, setQuery] = useState("");
+  const [subsectorFilter, setSubsectorFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCollaborator, setSelectedCollaborator] =
     useState<Collaborator | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [activities, setActivities] = useState([]);
+  type LocalActivity = {
+    id: string;
+    title: string;
+    description?: string | null;
+    status: string;
+    priority: string;
+    due_date?: string | null;
+    created_at: string;
+    completed_at?: string | null;
+    estimated_time?: number | null;
+    list_id?: string | null;
+    subsectors?: { name?: string | null } | null;
+    subtasks?: Array<{ id: string; title: string; is_completed: boolean }>;
+  };
+  const [activities, setActivities] = useState<LocalActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
 
   const fetchCollaborators = useCallback(async () => {
@@ -119,6 +137,18 @@ const ActiveCollaboratorsManager: React.FC = () => {
     fetchCollaborators();
   }, [profile?.sector_id, fetchCollaborators]);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return collaborators.filter((c) => {
+      const matchName = q ? c.full_name.toLowerCase().includes(q) : true;
+      const matchSub =
+        subsectorFilter === "all" || !subsectorFilter
+          ? true
+          : (c.subsectors?.name || "") === subsectorFilter;
+      return matchName && matchSub;
+    });
+  }, [collaborators, query, subsectorFilter]);
+
   const fetchCollaboratorActivities = useCallback(
     async (userId: string) => {
       if (!userId) return;
@@ -139,6 +169,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
           created_at,
           completed_at,
           estimated_time,
+          list_id,
           subsectors (
             name
           ),
@@ -164,7 +195,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
           return;
         }
 
-        setActivities(activitiesData || []);
+        setActivities((activitiesData as unknown as LocalActivity[]) || []);
       } catch (error) {
         console.error("Erro ao buscar atividades:", error);
         toast({
@@ -289,7 +320,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case "in_progress":
-        return "Em Progresso";
+        return "Em Andamento";
       case "completed":
         return "Concluída";
       case "pending":
@@ -314,13 +345,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
     }
   };
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
+  // Note: Do not early-return on error to keep hook order consistent.
 
   const loadingFallback = (
     <SkeletonCard>
@@ -360,9 +385,32 @@ const ActiveCollaboratorsManager: React.FC = () => {
     </SkeletonCard>
   );
 
+  const uniqueSubsectors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          collaborators
+            .map((c) => c.subsectors?.name || "")
+            .filter((n) => n && n.length)
+        )
+      ).sort(),
+    [collaborators]
+  );
+
+  const groupedByDate = useMemo(() => {
+    const acc: Record<string, LocalActivity[]> = {};
+    activities.forEach((a) => {
+      const key = new Date(a.created_at).toLocaleDateString("pt-BR");
+      (acc[key] = acc[key] || []).push(a);
+    });
+    return Object.entries(acc).sort(
+      ([a], [b]) => new Date(b).getTime() - new Date(a).getTime()
+    );
+  }, [activities]);
+
   const content =
-    collaborators.length === 0 ? (
-      <Card>
+    filtered.length === 0 ? (
+      <Card className="dark:bg-[#0f0f0f] dark:border-gray-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
@@ -373,6 +421,28 @@ const ActiveCollaboratorsManager: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <input
+                className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                placeholder="Buscar por nome"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={subsectorFilter}
+              onChange={(e) => setSubsectorFilter(e.target.value)}
+            >
+              <option value="all">Todos os subsetores</option>
+              {uniqueSubsectors.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="text-center py-8">
             <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
@@ -383,23 +453,45 @@ const ActiveCollaboratorsManager: React.FC = () => {
       </Card>
     ) : (
       <>
-        <Card>
+        <Card className="dark:bg-[#0f0f0f] dark:border-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
               Colaboradores Ativos
-              <Badge variant="secondary">{collaborators.length}</Badge>
+              <Badge variant="secondary">{filtered.length}</Badge>
             </CardTitle>
             <CardDescription>
               Veja todos os colaboradores aprovados e ativos do seu setor.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative flex-1">
+                <input
+                  className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                  placeholder="Buscar por nome"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <select
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+                value={subsectorFilter}
+                onChange={(e) => setSubsectorFilter(e.target.value)}
+              >
+                <option value="all">Todos os subsetores</option>
+                {uniqueSubsectors.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {collaborators.map((collaborator) => (
+              {filtered.map((collaborator) => (
                 <div
                   key={collaborator.id}
-                  className="group relative overflow-hidden rounded-lg border bg-card p-4 hover-transition hover:bg-[#09b230]/5 cursor-pointer hover:border-[#09b230]/30 animate-fade-in"
+                  className="group relative overflow-hidden rounded-lg border bg-card p-4 hover-transition hover:bg-[#09b230]/5 cursor-pointer hover:border-[#09b230]/30 animate-fade-in dark:bg-[#1f1f1f] dark:border-gray-800"
                   onClick={() => handleViewDetails(collaborator)}
                 >
                   <div className="flex items-start gap-3">
@@ -485,7 +577,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="border-b bg-muted/30 px-6 py-4">
+              <div className="border-b bg-muted/30 px-6 py-4 dark:bg-[#1f1f1f]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     {selectedCollaborator && (
@@ -551,15 +643,16 @@ const ActiveCollaboratorsManager: React.FC = () => {
               </div>
 
               {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[70vh]">
+              <div className="p-6 overflow-y-auto max-h-[70vh] dark:bg-[#0f0f0f]">
                 {/* Statistics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200 dark:border-blue-800/50">
+                  {/* Total de Atividades: Cinza */}
+                  <Card className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950/30 dark:to-gray-900/20 border-gray-200 dark:border-gray-800/50">
                     <CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">
+                      <div className="text-3xl font-bold text-gray-700 dark:text-gray-300">
                         {getActivitiesStats().total}
                       </div>
-                      <div className="text-sm text-blue-700 dark:text-blue-400 font-medium">
+                      <div className="text-sm text-gray-700 dark:text-gray-400 font-medium">
                         Total de Atividades
                       </div>
                     </CardContent>
@@ -580,16 +673,17 @@ const ActiveCollaboratorsManager: React.FC = () => {
                         {getActivitiesStats().inProgress}
                       </div>
                       <div className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
-                        Em Progresso
+                        Em Andamento
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/30 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/50">
+                  {/* Pendentes: Azul */}
+                  <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200 dark:border-blue-800/50">
                     <CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-orange-600 dark:text-orange-500">
+                      <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">
                         {getActivitiesStats().pending}
                       </div>
-                      <div className="text-sm text-orange-700 dark:text-orange-400 font-medium">
+                      <div className="text-sm text-blue-700 dark:text-blue-400 font-medium">
                         Pendentes
                       </div>
                     </CardContent>
@@ -597,7 +691,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
                 </div>
 
                 {/* Recent Activities */}
-                <Card>
+                <Card className="dark:bg-[#1f1f1f] dark:border-gray-800">
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <Activity className="h-5 w-5 text-[#09b230]" />
@@ -620,96 +714,39 @@ const ActiveCollaboratorsManager: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-                        {activities.slice(0, 10).map((activity) => (
-                          <div
-                            key={activity.id}
-                            className="flex items-start space-x-4 p-4 rounded-xl border bg-card hover:shadow-md transition-all duration-200"
-                          >
-                            <div className="flex-shrink-0">
-                              <div
-                                className={`h-3 w-3 rounded-full mt-2 ${
-                                  activity.status === "completed"
-                                    ? "bg-green-500"
-                                    : activity.status === "in_progress"
-                                    ? "bg-blue-500 animate-pulse"
-                                    : activity.status === "pending"
-                                    ? "bg-yellow-500"
-                                    : "bg-gray-500"
-                                }`}
-                              ></div>
+                        {groupedByDate.map(([dateKey, items]) => (
+                          <div key={dateKey} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-semibold text-foreground">
+                                {dateKey}
+                              </h4>
+                              <Badge variant="outline">{items.length}</Badge>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <h4 className="font-semibold text-foreground truncate">
-                                  {activity.title}
-                                </h4>
-                                <Badge
-                                  className={getStatusColor(activity.status)}
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {items.map((activity) => (
+                                <div
+                                  key={activity.id}
+                                  className="rounded-lg border hover:shadow-sm transition-all dark:bg-[#161616] dark:border-gray-800"
                                 >
-                                  {getStatusIcon(activity.status)}
-                                  <span className="ml-1 capitalize">
-                                    {getStatusText(activity.status)}
-                                  </span>
-                                </Badge>
-                              </div>
-                              {activity.description && (
-                                <p className="text-sm text-muted-foreground mb-2">
-                                  {activity.description}
-                                </p>
-                              )}
-                              {/* Subtasks Progress */}
-                              {getTotalSubtasks(activity.subtasks || []) >
-                                0 && (
-                                <div className="mb-3">
-                                  <div className="flex justify-between text-xs mb-1">
-                                    <span>Progresso</span>
-                                    <span>
-                                      {getActivityProgress(activity)}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-secondary/20 rounded-full h-2">
-                                    <div
-                                      className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                                      style={{
-                                        width: `${getActivityProgress(
-                                          activity
-                                        )}%`,
-                                      }}
+                                  <div className="p-2">
+                                    {/* Board/List tag above the title */}
+                                    <div className="mb-1 text-xs text-muted-foreground">
+                                      <span className="px-2 py-0.5 rounded-full bg-muted">
+                                        {activity.subsectors?.name ||
+                                          (activity.list_id
+                                            ? "Quadro Privado"
+                                            : "")}
+                                      </span>
+                                    </div>
+                                    {/* Lightweight adapt to Activity type for card rendering */}
+                                    <ActivityCard
+                                      activity={
+                                        activity as unknown as FullActivity
+                                      }
                                     />
                                   </div>
                                 </div>
-                              )}
-                              <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                                <div className="flex items-center">
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {activity.due_date
-                                    ? new Date(
-                                        activity.due_date
-                                      ).toLocaleDateString("pt-BR")
-                                    : "Sem prazo"}
-                                </div>
-                                {activity.subsectors && (
-                                  <div className="flex items-center">
-                                    <Badge
-                                      variant="outline"
-                                      className="h-5 text-xs"
-                                    >
-                                      {activity.subsectors.name}
-                                    </Badge>
-                                  </div>
-                                )}
-                                <div className="flex items-center">
-                                  <Badge
-                                    variant="secondary"
-                                    className={`h-5 text-xs ${getPriorityColor(
-                                      activity.priority
-                                    )}`}
-                                  >
-                                    Prioridade{" "}
-                                    {getPriorityText(activity.priority)}
-                                  </Badge>
-                                </div>
-                              </div>
+                              ))}
                             </div>
                           </div>
                         ))}
@@ -720,7 +757,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="border-t bg-muted/30 px-6 py-4">
+              <div className="border-t bg-muted/30 px-6 py-4 dark:bg-[#1f1f1f]">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
                     Membro desde{" "}
@@ -757,7 +794,13 @@ const ActiveCollaboratorsManager: React.FC = () => {
       fallback={loadingFallback}
       minLoadingTime={400}
     >
-      {content}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : (
+        content
+      )}
     </SmoothTransition>
   );
 };

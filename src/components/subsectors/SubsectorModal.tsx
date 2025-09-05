@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEscClose } from "@/hooks/useEscClose";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -22,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 const subsectorSchema = z.object({
@@ -52,6 +53,7 @@ export function SubsectorModal({
   const { profile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  useEscClose(open, () => onOpenChange(false));
 
   const form = useForm<SubsectorFormData>({
     resolver: zodResolver(subsectorSchema),

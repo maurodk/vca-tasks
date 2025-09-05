@@ -8,7 +8,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import Index from "./pages/Index";
 import { Archived } from "./pages/Archived";
-import { MyActivities } from "./pages/MyActivities";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import Subsector from "./pages/Subsector";
@@ -35,7 +34,7 @@ const App = () => (
               }
             >
               <Route index element={<Index />} />
-              <Route path="my-activities" element={<MyActivities />} />
+              {/** removed MyActivities route */}
               <Route path="archived" element={<Archived />} />
               <Route path="profile" element={<Profile />} />
               <Route path="subsector/:id" element={<Subsector />} />

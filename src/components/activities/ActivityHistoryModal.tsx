@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEscClose } from "@/hooks/useEscClose";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,10 @@ export function ActivityHistoryModal({
   title = "Histórico de Atividades",
 }: ActivityHistoryModalProps) {
   const [refreshing, setRefreshing] = useState(false);
+  useEscClose(open, () => onOpenChange(false));
+  const [subsectorFilter, setSubsectorFilter] = useState<string | "all">("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
 
   const {
     history,
@@ -50,6 +55,9 @@ export function ActivityHistoryModal({
   } = useActivityHistory({
     activityId,
     limit: activityId ? undefined : 50, // Limitar a 50 para histórico geral
+    subsectorId: subsectorFilter === "all" ? undefined : subsectorFilter,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
   });
 
   const handleRefresh = async () => {
@@ -111,7 +119,7 @@ export function ActivityHistoryModal({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
+            <Clock className="h-5 w-5 text-foreground dark:text-white" />
             {title}
             {activityId && history.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground">
@@ -119,7 +127,7 @@ export function ActivityHistoryModal({
               </span>
             )}
           </DialogTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -128,10 +136,45 @@ export function ActivityHistoryModal({
               className="flex items-center gap-2"
             >
               <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${
+                  refreshing ? "animate-spin" : ""
+                } text-foreground dark:text-white`}
               />
               Atualizar
             </Button>
+            {!activityId && (
+              <>
+                <select
+                  className="h-8 rounded-md border bg-background px-2 text-sm"
+                  value={subsectorFilter}
+                  onChange={(e) =>
+                    setSubsectorFilter(e.target.value as "all" | string)
+                  }
+                >
+                  <option value="all">Todos os subsetores</option>
+                  {/* Options should be provided by caller or fetched; simple dynamic list based on current entries */}
+                  {[...new Set(history.map((h) => h.subsector?.name || ""))]
+                    .filter(Boolean)
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  type="date"
+                  className="h-8 rounded-md border bg-background px-2 text-sm"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="h-8 rounded-md border bg-background px-2 text-sm"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </>
+            )}
             {history.length > 0 && (
               <span className="text-xs text-muted-foreground">
                 {history.length} {history.length === 1 ? "entrada" : "entradas"}
@@ -144,7 +187,7 @@ export function ActivityHistoryModal({
           <div className="space-y-4 p-4">
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <RefreshCw className="h-6 w-6 animate-spin" />
+                <RefreshCw className="h-6 w-6 animate-spin text-foreground dark:text-white" />
                 <span className="ml-2">Carregando histórico...</span>
               </div>
             )}
@@ -173,7 +216,7 @@ export function ActivityHistoryModal({
 
             {!loading && !error && history.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
+                <Clock className="h-12 w-12 text-muted-foreground dark:text-white mb-4" />
                 <p className="text-muted-foreground">
                   {activityId
                     ? "Nenhum histórico encontrado para esta atividade"
@@ -243,7 +286,7 @@ export function ActivityHistoryModal({
                             {!activityId && (
                               <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
-                                  <Activity className="h-3 w-3" />
+                                  <Activity className="h-3 w-3 text-foreground dark:text-white" />
                                   {entry.activity_title}
                                   {entry.action === "deleted" && (
                                     <span className="text-red-500 font-medium">

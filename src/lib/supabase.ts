@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase_new";
+import { Database } from "@/types/supabase";
 
 // Pega as variáveis de ambiente do seu arquivo .env ou .env.local
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
