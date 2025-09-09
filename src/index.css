@@ -63,11 +63,11 @@ Inspirado em Material Design 3, Notion e Linear
     --destructive-50: 0 72% 97%;
 
     /* 🎨 Borders & Inputs - Sistema Inteligente */
-    --border: 231 15% 88%;
-    --border-hover: 231 20% 82%;
-    --input: 270 15% 96%;
-    --input-border: 231 15% 85%;
-    --ring: 239 84% 67%;
+    --border: 231 15% 75%;
+    --border-hover: 231 20% 70%;
+    --input: 231 15% 75%;
+    --input-border: 231 15% 70%;
+    --ring: 231 15% 60%;
 
     /* ✨ Gradientes Mágicos */
     --gradient-primary: linear-gradient(
@@ -486,7 +486,7 @@ Inspirado em Material Design 3, Notion e Linear
   }
 
   .animate-pulse-glow {
-    animation: pulseGlow 2s ease-in-out infinite;
+    animation: pulseGlow 3s ease-in-out infinite;
   }
 
   /* Melhor pulse para skeletons */

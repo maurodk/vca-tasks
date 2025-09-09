@@ -408,10 +408,10 @@ export const ActivityCalendar = ({ subsectorId }: ActivityCalendarProps) => {
                         {dayData.activities.slice(0, 2).map((activity) => (
                           <div
                             key={activity.id}
-                            className={`text-xs p-1 rounded text-secondary-foreground truncate ${
+                            className={`text-xs p-1 rounded truncate ${
                               activity.priority === "high"
-                                ? "bg-red-100 border border-red-300 text-red-800 font-medium"
-                                : "bg-secondary"
+                                ? "bg-red-100 border border-red-300 text-black font-medium"
+                                : "bg-secondary text-secondary-foreground"
                             }`}
                           >
                             {activity.title}

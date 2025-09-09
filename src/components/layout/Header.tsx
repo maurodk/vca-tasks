@@ -137,10 +137,10 @@ export const Header = () => {
           variant="ghost"
           size="sm"
           onClick={() => setHistoryModalOpen(true)}
-          className="h-8 w-8 p-0 transition-colors relative"
+          className="h-8 w-8 p-0 transition-colors relative mr-4"
           title="Histórico de Atividades"
         >
-          <Clock className="h-4 w-4 text-white" />
+          <Clock className="h-4 w-4 text-muted-foreground hover:text-foreground dark:text-white transition-colors" />
         </Button>
         <UserMenu />
       </div>

@@ -1,6 +1,6 @@
 import { Activity } from "@/hooks/useActivities";
 import { format } from "date-fns";
-import { Calendar, Clock, User, CheckSquare, Tag } from "lucide-react";
+import { Calendar, Clock, User, CheckSquare, Tag, AlertTriangle } from "lucide-react";
 
 interface ActivityCardProps {
   activity: Activity;
@@ -81,12 +81,25 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
     activity.subtasks?.filter((s) => s.is_completed).length || 0;
 
   return (
-    <div className="p-3 cursor-pointer group" onClick={onClick}>
+    <div className={`p-3 cursor-pointer group transition-all duration-200 ${
+      activity.priority === "high" 
+        ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 shadow-md hover:shadow-lg" 
+        : ""
+    }`} onClick={onClick}>
       {/* Título + marcador de privacidade */}
       <div className="mb-2 flex items-start justify-between gap-2">
-        <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-          {activity.title}
-        </h4>
+        <div className="flex items-center gap-2 flex-1">
+          {activity.priority === "high" && (
+            <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+          )}
+          <h4 className={`text-sm font-medium leading-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
+            activity.priority === "high" 
+              ? "text-red-800 dark:text-red-200 font-semibold" 
+              : "text-gray-800 dark:text-gray-200"
+          }`}>
+            {activity.title}
+          </h4>
+        </div>
         {((activity as unknown as { is_private?: boolean }).is_private ??
           false) && (
           <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
