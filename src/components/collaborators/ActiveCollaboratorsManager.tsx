@@ -32,7 +32,7 @@ import { ActivityCard } from "@/components/activities/ActivityCard";
 import { Activity as FullActivity } from "@/hooks/useActivities";
 import { SkeletonCard, SkeletonContent } from "@/components/ui/skeleton-card";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 // import { CollaboratorDetailsModal } from "./CollaboratorDetailsModal";
@@ -78,7 +78,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
     due_date?: string | null;
     created_at: string;
     completed_at?: string | null;
-    estimated_time?: number | null;
+
     list_id?: string | null;
     subsectors?: { name?: string | null } | null;
     subtasks?: Array<{ id: string; title: string; is_completed: boolean }>;
@@ -168,7 +168,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
           due_date,
           created_at,
           completed_at,
-          estimated_time,
+
           list_id,
           subsectors (
             name

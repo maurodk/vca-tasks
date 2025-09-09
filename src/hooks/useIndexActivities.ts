@@ -10,8 +10,14 @@ export function useIndexActivities() {
   const { profile } = useAuth();
 
   const fetchActivities = useCallback(async () => {
-    if (!profile?.sector_id) return;
+    if (!profile?.sector_id) {
+      console.log("Pulando fetchActivities: setor não definido no perfil");
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
 
+    console.log("Carregando atividades para setor:", profile.sector_id);
     setLoading(true);
     try {
       let query = supabase
@@ -42,13 +48,16 @@ export function useIndexActivities() {
       // Filtro para colaboradores
       if (profile.role === "collaborator" && profile.subsector_id) {
         // Para colaboradores: ver atividades do seu subsetor OU atividades criadas por você (inclui listas privadas)
-        // Simplificado para evitar erros de sintaxe do PostgREST ao combinar NOT NULL dentro de OR.
+        console.log(
+          "Aplicando filtros para colaborador com subsetor:",
+          profile.subsector_id
+        );
         query = query.or(
           `subsector_id.eq.${profile.subsector_id},created_by.eq.${profile.id}`
         );
       } else if (profile.id) {
         // Gestores: excluir cartões de listas privadas de OUTROS usuários
-        // Mantém: (list_id IS NULL) OR (list_id NOT NULL AND created_by == current user)
+        console.log("Aplicando filtros para gestor");
         query = query.or(
           `list_id.is.null,and(list_id.not.is.null,created_by.eq.${profile.id})`
         );
@@ -56,8 +65,12 @@ export function useIndexActivities() {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro na consulta de atividades:", error);
+        throw error;
+      }
 
+      console.log(`Atividades carregadas: ${data?.length || 0}`);
       setActivities((data as unknown as Activity[]) || []);
     } catch (error) {
       console.error("Erro ao carregar atividades:", error);
@@ -70,37 +83,47 @@ export function useIndexActivities() {
     fetchActivities();
 
     // Real-time subscription apenas para esta instância
-    const channel = supabase
-      .channel(`index_activities_${profile?.sector_id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "activities",
-          filter: `sector_id=eq.${profile?.sector_id}`,
-        },
-        () => {
-          // Refetch após mudanças
-          fetchActivities();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "subtasks",
-        },
-        () => {
-          // Refetch após mudanças nas subtasks também
-          fetchActivities();
-        }
-      )
-      .subscribe();
+    let channel;
+
+    try {
+      if (profile?.sector_id) {
+        channel = supabase
+          .channel(`index_activities_${profile.sector_id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "activities",
+              filter: `sector_id=eq.${profile.sector_id}`,
+            },
+            () => {
+              // Refetch após mudanças
+              fetchActivities();
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "subtasks",
+            },
+            () => {
+              // Refetch após mudanças nas subtasks também
+              fetchActivities();
+            }
+          )
+          .subscribe();
+      }
+    } catch (error) {
+      console.error("Erro ao configurar canal em tempo real:", error);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [fetchActivities, profile?.sector_id]);
 

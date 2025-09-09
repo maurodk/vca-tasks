@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useArchivedActivities } from "@/hooks/useArchivedActivities";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import {
   Card,
   CardContent,

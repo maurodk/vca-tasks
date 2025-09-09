@@ -7,6 +7,8 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import Index from "./pages/Index";
+import IndexDebug from "./pages/IndexDebug";
+import IndexSimple from "./pages/IndexSimple";
 import { Archived } from "./pages/Archived";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
@@ -33,7 +35,9 @@ const App = () => (
                 </AuthGuard>
               }
             >
-              <Route index element={<Index />} />
+              <Route index element={<IndexSimple />} />
+              <Route path="debug" element={<IndexDebug />} />
+              <Route path="original" element={<Index />} />
               {/** removed MyActivities route */}
               <Route path="archived" element={<Archived />} />
               <Route path="profile" element={<Profile />} />

@@ -26,7 +26,7 @@ import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { ActivityDetailModal } from "@/components/activities/ActivityDetailModal";
 import { isSameDay } from "date-fns";
 import { useActivityOperations } from "@/hooks/useActivityOperations";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 
 interface DayData {
   date: Date;

@@ -19,21 +19,18 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useIndexActivities } from "@/hooks/useIndexActivities";
-import { useAuth } from "@/hooks/useAuth";
+import { useIndexActivitiesStable } from "@/hooks/useIndexActivitiesStable";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { useActivityOperations } from "@/hooks/useActivityOperations";
 import { Activity } from "@/hooks/useActivities";
 
-const Index = () => {
+const IndexSimple = () => {
   const { profile } = useAuth();
-  const { activities, loading, refetch } = useIndexActivities();
-  const { createActivity, updateActivity, archiveActivity } =
-    useActivityOperations();
+  const { activities, loading, refetch } = useIndexActivitiesStable();
+  const { createActivity, updateActivity, archiveActivity } = useActivityOperations();
   const { toast } = useToast();
   const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
-    null
-  );
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newActivitySubsector, setNewActivitySubsector] = useState<{
@@ -43,47 +40,32 @@ const Index = () => {
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [creatingListId, setCreatingListId] = useState<string | null>(null);
 
-  // Memoizar as datas para evitar recriação em cada render
   const { todayStart, todayEnd } = useMemo(() => {
     const today = new Date();
     return {
-      todayStart: new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      ),
-      todayEnd: new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate() + 1
-      ),
+      todayStart: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      todayEnd: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
     };
   }, []);
 
-  // Conjunto de atividades realmente visíveis na Home (mesma regra do useIndexActivities)
-  const visibleActivities = useMemo(() => activities, [activities]);
-
   const stats = useMemo(
     () => ({
-      total: visibleActivities.length,
-      pending: visibleActivities.filter((a) => a.status === "pending").length,
-      in_progress: visibleActivities.filter((a) => a.status === "in_progress")
-        .length,
-      completed: visibleActivities.filter((a) => a.status === "completed")
-        .length,
-      today: visibleActivities.filter((a) => {
+      total: activities.length,
+      pending: activities.filter((a) => a.status === "pending").length,
+      in_progress: activities.filter((a) => a.status === "in_progress").length,
+      completed: activities.filter((a) => a.status === "completed").length,
+      today: activities.filter((a) => {
         const createdAt = new Date(a.created_at);
         return createdAt >= todayStart && createdAt < todayEnd;
       }).length,
-      overdue: visibleActivities.filter((a) => {
+      overdue: activities.filter((a) => {
         if (a.status === "completed" || !a.due_date) return false;
         return new Date(a.due_date) < new Date();
       }).length,
     }),
-    [visibleActivities, todayStart, todayEnd]
+    [activities, todayStart, todayEnd]
   );
 
-  // Filtrar atividades baseado no filtro selecionado
   const filteredActivities = useMemo(() => {
     if (!selectedFilter) return activities;
 
@@ -109,37 +91,11 @@ const Index = () => {
     }
   }, [activities, selectedFilter, todayStart, todayEnd]);
 
-  // Se ainda está carregando auth, mostrar indicador de carregamento
-  if (useAuth().loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
-        <div className="text-center space-y-4 glass-effect p-8 rounded-2xl">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Carregando autenticação...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Se não há perfil, mostrar indicador de carregamento
   if (!profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
-        <div className="text-center space-y-4 glass-effect p-8 rounded-2xl">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Verificando acesso...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Mostrar estado de carregamento enquanto as atividades estão sendo carregadas
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
-        <div className="text-center space-y-4 glass-effect p-8 rounded-2xl">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Carregando atividades...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p>Perfil não encontrado</p>
         </div>
       </div>
     );
@@ -152,7 +108,6 @@ const Index = () => {
     setIsModalOpen(true);
   };
 
-  // Create inside personal list (no subsector)
   const handleAddPersonalCard = (listId: string) => {
     setCreatingListId(listId);
     setNewActivitySubsector(null);
@@ -169,7 +124,6 @@ const Index = () => {
 
   const handleSaveActivity = async (activityData: Partial<Activity>) => {
     if (isCreating && (newActivitySubsector || creatingListId)) {
-      // Criar nova atividade
       const createData = {
         title: activityData.title || "",
         description: activityData.description,
@@ -178,35 +132,25 @@ const Index = () => {
         priority: activityData.priority,
         status: activityData.status,
         user_id: activityData.user_id,
-        is_private:
-          (activityData as unknown as { is_private?: boolean }).is_private ??
-          Boolean(creatingListId),
+        is_private: (activityData as unknown as { is_private?: boolean }).is_private ?? Boolean(creatingListId),
       };
 
-      // If creating for personal list, also set list_id after creation
       const success = await createActivity(createData);
       if (success) {
         if (creatingListId) {
           await updateActivity({ id: success.id, list_id: creatingListId });
-          // Notify personal list board for instant refresh
-          window.dispatchEvent(
-            new CustomEvent("personal-list-updated", {
-              detail: { listId: creatingListId },
-            })
-          );
+          window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId: creatingListId } }));
         }
-        // Se a atividade foi criada e tem subtasks, salvar as subtasks
         if (activityData.subtasks && activityData.subtasks.length > 0) {
           await saveActivitySubtasks(success.id, activityData.subtasks);
         }
-        // Forçar atualização imediata
+        // Force immediate refresh
         refetch();
         setIsModalOpen(false);
         setNewActivitySubsector(null);
         setCreatingListId(null);
       }
     } else if (selectedActivity) {
-      // Atualizar atividade existente
       const updateData = {
         id: selectedActivity.id,
         title: activityData.title,
@@ -215,43 +159,28 @@ const Index = () => {
         priority: activityData.priority,
         status: activityData.status,
         user_id: activityData.user_id,
-        is_private: (activityData as unknown as { is_private?: boolean })
-          .is_private,
+        is_private: (activityData as unknown as { is_private?: boolean }).is_private,
       };
 
       const success = await updateActivity(updateData);
       if (success) {
-        // Salvar subtasks se houver
         if (activityData.subtasks) {
-          await saveActivitySubtasks(
-            selectedActivity.id,
-            activityData.subtasks
-          );
+          await saveActivitySubtasks(selectedActivity.id, activityData.subtasks);
         }
         if (selectedActivity.list_id) {
-          window.dispatchEvent(
-            new CustomEvent("personal-list-updated", {
-              detail: { listId: selectedActivity.list_id },
-            })
-          );
+          window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId: selectedActivity.list_id } }));
         }
-        // Forçar atualização imediata
+        // Force immediate refresh
         refetch();
         setIsModalOpen(false);
       }
     }
   };
 
-  // Função para salvar subtasks
-  const saveActivitySubtasks = async (
-    activityId: string,
-    subtasks: Subtask[]
-  ) => {
+  const saveActivitySubtasks = async (activityId: string, subtasks: Subtask[]) => {
     try {
-      // Primeiro, remover todas as subtasks existentes
       await supabase.from("subtasks").delete().eq("activity_id", activityId);
 
-      // Depois, inserir as novas subtasks
       if (subtasks.length > 0) {
         const subtasksToInsert = subtasks.map((subtask, index) => ({
           activity_id: activityId,
@@ -261,10 +190,7 @@ const Index = () => {
           checklist_group: subtask.checklist_group || null,
         }));
 
-        const { error } = await supabase
-          .from("subtasks")
-          .insert(subtasksToInsert);
-
+        const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
         if (error) throw error;
       }
     } catch (error) {
@@ -279,14 +205,12 @@ const Index = () => {
 
   const handleDeleteActivity = async (activityId: string) => {
     await archiveActivity(activityId);
-    await refetch();
-    // Fire event for personal list boards too
     const listId = selectedActivity?.list_id || creatingListId || null;
     if (listId) {
-      window.dispatchEvent(
-        new CustomEvent("personal-list-updated", { detail: { listId } })
-      );
+      window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId } }));
     }
+    // Force immediate refresh
+    refetch();
     setIsModalOpen(false);
   };
 
@@ -298,8 +222,7 @@ const Index = () => {
             Sistema de Atividades
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
-            Gerencie suas atividades em um board Kanban organizado por
-            subsetores
+            Gerencie suas atividades em um board Kanban organizado por subsetores
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -308,11 +231,7 @@ const Index = () => {
             onClick={() => setShowCalendar(!showCalendar)}
             className="flex items-center gap-2"
           >
-            {showCalendar ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
+            {showCalendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {showCalendar ? "Ocultar" : "Mostrar"} Calendário
           </Button>
         </div>
@@ -328,99 +247,79 @@ const Index = () => {
         </div>
       )}
 
-      {/* KPIs - Filtros Minimalistas */}
       <div className="flex flex-wrap gap-2 mb-4">
         <button
-          onClick={() =>
-            setSelectedFilter(selectedFilter === null ? null : null)
-          }
+          onClick={() => setSelectedFilter(selectedFilter === null ? null : null)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === null
               ? "bg-blue-600 dark:bg-blue-500 text-white shadow-md"
               : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
           }`}
         >
-          Todas ({stats.total})
+          Todas
         </button>
 
         <button
-          onClick={() =>
-            setSelectedFilter(selectedFilter === "pending" ? null : "pending")
-          }
+          onClick={() => setSelectedFilter(selectedFilter === "pending" ? null : "pending")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "pending"
               ? "bg-blue-500 text-white shadow-md"
               : "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800"
           }`}
         >
-          Pendentes ({stats.pending})
+          Pendentes
         </button>
 
         <button
-          onClick={() =>
-            setSelectedFilter(
-              selectedFilter === "in_progress" ? null : "in_progress"
-            )
-          }
+          onClick={() => setSelectedFilter(selectedFilter === "in_progress" ? null : "in_progress")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "in_progress"
               ? "bg-yellow-500 text-white shadow-md"
               : "bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-800"
           }`}
         >
-          Em Andamento ({stats.in_progress})
+          Em Andamento
         </button>
 
         <button
-          onClick={() =>
-            setSelectedFilter(
-              selectedFilter === "completed" ? null : "completed"
-            )
-          }
+          onClick={() => setSelectedFilter(selectedFilter === "completed" ? null : "completed")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "completed"
               ? "bg-green-500 text-white shadow-md"
               : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800"
           }`}
         >
-          Concluídas ({stats.completed})
+          Concluídas
         </button>
 
         <button
-          onClick={() =>
-            setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")
-          }
+          onClick={() => setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "overdue"
               ? "bg-red-500 text-white shadow-md"
               : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800"
           }`}
         >
-          Atrasadas ({stats.overdue})
+          Atrasadas
         </button>
 
         <button
-          onClick={() =>
-            setSelectedFilter(selectedFilter === "today" ? null : "today")
-          }
+          onClick={() => setSelectedFilter(selectedFilter === "today" ? null : "today")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "today"
               ? "bg-purple-500 text-white shadow-md"
               : "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800"
           }`}
         >
-          Hoje ({stats.today})
+          Hoje
         </button>
       </div>
 
-      {/* Cartões flutuando (sem board) */}
       <div className="min-h-[60vh]">
         <div className="flex items-center gap-2 mb-3">
           <LayoutGrid className="h-5 w-5 text-gray-600 dark:text-gray-400" />
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            {selectedFilter
-              ? `Atividades (${filteredActivities.length})`
-              : `Atividades (${stats.total})`}
+            Atividades
           </h2>
         </div>
 
@@ -431,7 +330,6 @@ const Index = () => {
           hideEmpty={Boolean(selectedFilter)}
         />
 
-        {/* Personal private boards */}
         <PersonalListsBoard
           onCreateCard={handleAddPersonalCard}
           onEditCard={handleEditActivity}
@@ -440,19 +338,12 @@ const Index = () => {
             selectedFilter === "in_progress" ||
             selectedFilter === "completed" ||
             selectedFilter === "archived"
-              ? (selectedFilter as
-                  | "pending"
-                  | "in_progress"
-                  | "completed"
-                  | "archived")
+              ? (selectedFilter as "pending" | "in_progress" | "completed" | "archived")
               : null
           }
         />
       </div>
 
-      {/* Calendar section rendered above when toggled */}
-
-      {/* Modal de Edição */}
       <ActivityEditModal
         activity={isCreating ? null : selectedActivity}
         isOpen={isModalOpen}
@@ -464,9 +355,10 @@ const Index = () => {
         }}
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
+        subsectorId={newActivitySubsector?.id}
       />
     </div>
   );
 };
 
-export default Index;
+export default IndexSimple;

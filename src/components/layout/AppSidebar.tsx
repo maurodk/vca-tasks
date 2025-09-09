@@ -30,7 +30,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { supabase } from "@/lib/supabase";
 import { SubsectorModal } from "@/components/subsectors/SubsectorModal";
 import { ThemeToggle } from "@/components/theme/theme-toggle";

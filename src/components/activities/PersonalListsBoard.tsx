@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Plus, Trash2, Lock } from "lucide-react";
 import { usePersonalLists } from "@/hooks/usePersonalLists";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { useToast } from "@/hooks/use-toast";
 import { Activity } from "@/hooks/useActivities";
 import { ActivityCard } from "@/components/activities/ActivityCard";

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -21,6 +22,7 @@ export const LoginForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wasLoggedOut, setWasLoggedOut] = useState(false);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -83,9 +85,35 @@ export const LoginForm = () => {
         setLoading(false);
         return;
       }
+      // Verificar perfil e aprovação antes de seguir
+      if (authData.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, is_approved")
+          .eq("id", authData.user.id)
+          .single();
 
-      // Se chegou aqui, o login foi bem-sucedido e o email foi confirmado
-      // O useAuth vai verificar automaticamente se o perfil existe
+        if (profileError || !profile) {
+          setError(
+            "Este email não está cadastrado no sistema. Entre em contato com o administrador para ter seu acesso liberado."
+          );
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+
+        if (profile.is_approved === false) {
+          setError(
+            "Seu acesso ainda não foi aprovado pelo gestor. Tente novamente mais tarde."
+          );
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+
+        // Login bem-sucedido
+        window.location.href = '/';
+      }
     } catch (err) {
       setError("Erro inesperado. Tente novamente.");
       console.error("Login error:", err);

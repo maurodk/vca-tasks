@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "./useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 
 export interface PendingUser {
   id: string;
@@ -8,6 +9,8 @@ export interface PendingUser {
   full_name: string;
   created_at: string;
   status?: string;
+  sector_id?: string | null;
+  subsector_id?: string | null;
   sectors?: {
     name: string;
   };
@@ -34,7 +37,7 @@ export const usePendingUsers = () => {
       console.log("🔍 Fetching pending users from pending_users table...");
 
       // Direct query to pending_users table
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("pending_users")
         .select(
           `
@@ -43,12 +46,10 @@ export const usePendingUsers = () => {
           full_name,
           created_at,
           status,
-          sectors:sector_id (
-            name
-          ),
-          subsectors:subsector_id (
-            name
-          )
+          sector_id,
+          subsector_id,
+          sectors:sector_id ( name ),
+          subsectors:subsector_id ( name )
         `
         )
         .eq("status", "pending")
@@ -63,7 +64,7 @@ export const usePendingUsers = () => {
       }
 
       // Type assertion for the result
-      const typedData = data as PendingUser[];
+      const typedData = (data ?? []) as unknown as PendingUser[];
       console.log("✅ Typed pending users:", typedData);
       setPendingUsers(typedData || []);
     } catch (err) {
@@ -83,7 +84,7 @@ export const usePendingUsers = () => {
       console.log("🔄 Approving user:", userId);
 
       // First, get the pending user data
-      const { data: pendingUser, error: fetchError } = await supabase
+      const { data: pendingUser, error: fetchError } = await (supabase as any)
         .from("pending_users")
         .select("*")
         .eq("id", userId)
@@ -117,7 +118,7 @@ export const usePendingUsers = () => {
       console.log("✅ Profile created successfully");
 
       // Update the pending user status to approved
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from("pending_users")
         .update({ status: "approved" })
         .eq("id", userId);
@@ -144,7 +145,7 @@ export const usePendingUsers = () => {
       console.log("🔄 Rejecting user:", userId);
 
       // For now, let's update the status directly in pending_users table
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("pending_users")
         .update({ status: "rejected" })
         .eq("id", userId);

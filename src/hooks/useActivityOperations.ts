@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Activity } from "@/hooks/useActivities";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { Database } from "@/types/supabase";
 
 type ActivityStatus = "pending" | "in_progress" | "completed" | "archived";
@@ -47,7 +47,6 @@ export function useActivityOperations() {
             created_by: user.id,
             user_id: data.user_id ?? user.id,
             sector_id: profile.sector_id,
-            estimated_time: 0,
             is_private: data.is_private ?? false,
           };
 
@@ -64,6 +63,9 @@ export function useActivityOperations() {
           description: "Nova atividade foi criada com sucesso.",
         });
 
+        // Trigger real-time update
+        window.dispatchEvent(new CustomEvent("activity-created", { detail: activity }));
+        
         return activity as unknown as Activity;
       } catch (error) {
         console.error("Erro ao criar atividade:", error);
@@ -102,6 +104,9 @@ export function useActivityOperations() {
           description: "As alterações foram salvas com sucesso.",
         });
 
+        // Trigger real-time update
+        window.dispatchEvent(new CustomEvent("activity-updated", { detail: { id: data.id, ...updateData } }));
+        
         return true;
       } catch (error) {
         console.error("Erro ao atualizar atividade:", error);
@@ -171,6 +176,9 @@ export function useActivityOperations() {
           description: `Status alterado para ${getStatusLabel(status)}.`,
         });
 
+        // Trigger real-time update
+        window.dispatchEvent(new CustomEvent("activity-updated", { detail: { id: activityId, status, completed_at: updateData.completed_at } }));
+        
         return true;
       } catch (error) {
         console.error("Erro ao atualizar atividade:", error);

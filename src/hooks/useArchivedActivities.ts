@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/types/supabase";
 
@@ -85,21 +85,23 @@ export function useArchivedActivities() {
   const deleteActivity = useCallback(
     async (activityId: string) => {
       try {
-        // Usar RPC para deletar (bypassa políticas RLS)
-        const { data, error } = await supabase.rpc("delete_activity", {
-          activity_id: activityId,
-        });
+        // Primeiro deletar subtasks
+        const { error: subtasksError } = await supabase
+          .from("subtasks")
+          .delete()
+          .eq("activity_id", activityId);
 
-        if (error) {
-          throw error;
+        if (subtasksError) {
+          console.warn("Erro ao deletar subtasks:", subtasksError);
         }
 
-        // Verificar se a exclusão foi bem-sucedida
-        if (!data) {
-          throw new Error(
-            "Não foi possível excluir a atividade. Verifique se você tem permissão ou se a atividade existe."
-          );
-        }
+        // Depois deletar a atividade
+        const { error } = await supabase
+          .from("activities")
+          .delete()
+          .eq("id", activityId);
+
+        if (error) throw error;
 
         // Atualizar estado local imediatamente
         setActivities((prev) =>

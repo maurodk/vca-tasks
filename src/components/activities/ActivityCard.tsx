@@ -118,12 +118,21 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
       )}
 
       {/* Data de vencimento */}
-      {activity.due_date && (
-        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
-          <Calendar className="h-3 w-3 text-gray-700 dark:text-gray-400" />
-          <span>{format(new Date(activity.due_date), "dd/MM")}</span>
-        </div>
-      )}
+      {activity.due_date && (() => {
+        try {
+          const date = new Date(activity.due_date + 'T00:00:00');
+          if (isNaN(date.getTime())) return null;
+          return (
+            <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
+              <Calendar className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+              <span>{format(date, "dd/MM")}</span>
+            </div>
+          );
+        } catch (error) {
+          console.warn('Invalid date:', activity.due_date, error);
+          return null;
+        }
+      })()}
 
       {/* Checklist Groups Preview */}
       {totalSubtasks > 0 && (

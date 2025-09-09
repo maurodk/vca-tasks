@@ -2,7 +2,6 @@ import { Search, Clock } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { SearchDropdown } from "@/components/layout/SearchDropdown";
@@ -15,8 +14,13 @@ import {
 } from "@/hooks/useOptimizedActivities";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef, useEffect } from "react";
-import { Database } from "@/integrations/supabase/types";
+import { Database } from "@/types/supabase";
 import { useActivityOperations } from "@/hooks/useActivityOperations";
+import {
+  requestWakeLock,
+  releaseWakeLock,
+  isWakeLockActive,
+} from "@/lib/wakeLock";
 
 export const Header = () => {
   const {
@@ -36,8 +40,22 @@ export const Header = () => {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const { updateActivity, archiveActivity } = useActivityOperations();
+  const [wakeLockOn, setWakeLockOn] = useState(isWakeLockActive());
 
-  const handleActivitySelect = async (activity: SearchActivity) => {
+  useEffect(() => {
+    // Re-acquire wake lock after returning to the tab if user enabled it
+    const handler = async () => {
+      if (wakeLockOn && !isWakeLockActive()) {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [wakeLockOn]);
+
+  // Extend SearchActivity at call site to include optional list_id without using any
+  type SearchActivityWithList = SearchActivity & { list_id?: string | null };
+  const handleActivitySelect = async (activity: SearchActivityWithList) => {
     // Converter SearchActivity para Activity completa
     const fullActivity: Activity = {
       id: activity.id,
@@ -50,6 +68,7 @@ export const Header = () => {
       user_id: activity.user_id,
       created_by: activity.created_by,
       sector_id: activity.sector_id,
+      list_id: activity.list_id ?? null,
       subsector_id: activity.subsector_id,
       created_at: activity.created_at,
       updated_at: activity.updated_at,
@@ -113,16 +132,16 @@ export const Header = () => {
 
       <div className="flex items-center gap-3">
         <ThemeToggle />
+
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setHistoryModalOpen(true)}
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground transition-colors relative"
+          className="h-8 w-8 p-0 transition-colors relative"
           title="Histórico de Atividades"
         >
-          <Clock className="h-4 w-4" />
+          <Clock className="h-4 w-4 text-white" />
         </Button>
-        <NotificationCenter />
         <UserMenu />
       </div>
 

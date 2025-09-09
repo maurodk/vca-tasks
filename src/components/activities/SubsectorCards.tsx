@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityCard } from "@/components/activities/ActivityCard";
 import { Activity } from "@/hooks/useActivities";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { Plus } from "lucide-react";
 
 interface Subsector {

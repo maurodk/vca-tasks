@@ -259,6 +259,22 @@ export function useOptimizedActivities() {
     return unsubscribe;
   }, []);
 
+  // Global refetch on tab focus/visibility
+  useEffect(() => {
+    const handler = () => {
+      if (profile?.sector_id) {
+        activitiesManager.fetchActivities(
+          profile.sector_id,
+          profile.role || "collaborator",
+          profile.subsector_id || undefined
+        );
+      }
+    };
+    window.addEventListener("app:refetch", handler as EventListener);
+    return () =>
+      window.removeEventListener("app:refetch", handler as EventListener);
+  }, [profile?.sector_id, profile?.role, profile?.subsector_id]);
+
   useEffect(() => {
     if (profile?.sector_id) {
       activitiesManager.fetchActivities(

@@ -144,7 +144,7 @@ export const RegisterForm = () => {
     setEmailResent(false);
 
     try {
-      const redirectUrl = `${window.location.origin}/`;
+      const redirectUrl = `${window.location.origin}/auth`;
 
       const { error } = await supabase.auth.resend({
         type: "signup",
@@ -218,8 +218,9 @@ export const RegisterForm = () => {
         <div>
           <h3 className="text-lg font-semibold">Registro realizado!</h3>
           <p className="text-muted-foreground">
-            Verifique seu email ({registeredEmail}) para confirmar sua conta.
-            Após a confirmação, um gestor irá aprovar seu acesso.
+            Verifique seu email ({registeredEmail}) para confirmar sua conta
+            (veja a pasta de spam também). Após a confirmação, um gestor irá
+            aprovar seu acesso.
           </p>
           {emailResent && (
             <Alert className="mt-4">

@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 let initialized = false;
 
 export const useAuth = () => {
-  const { user, session, profile, setAuth, setProfile } = useAuthStore();
+  const { user, session, profile, loading, setAuth, setProfile, setLoading } = useAuthStore();
 
   useEffect(() => {
     if (initialized) return;
@@ -17,6 +17,7 @@ export const useAuth = () => {
       if (!session) {
         setAuth(null, null);
         setProfile(null);
+        setLoading(false);
         return;
       }
 
@@ -29,6 +30,7 @@ export const useAuth = () => {
         .single();
 
       setProfile(profileData || null);
+      setLoading(false);
     };
 
     init();
@@ -38,6 +40,7 @@ export const useAuth = () => {
     user,
     session,
     profile,
+    loading,
     isAuthenticated: !!user && !!profile,
     isManager: profile?.role === "manager",
   };

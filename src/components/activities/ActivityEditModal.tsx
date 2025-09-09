@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuthFinal";
 import { supabase } from "@/lib/supabase";
 
 interface ActivityEditModalProps {
@@ -25,6 +25,7 @@ interface ActivityEditModalProps {
   onSave: (activity: Partial<Activity>) => void;
   onDelete?: (activityId: string) => void;
   defaultDueDate?: Date; // opcional: define data inicial ao criar
+  subsectorId?: string; // ID do subsetor para filtrar usuários
 }
 
 export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
@@ -34,6 +35,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   onSave,
   onDelete,
   defaultDueDate,
+  subsectorId,
 }) => {
   const { profile, isManager, user } = useAuth();
   const [title, setTitle] = useState("");
@@ -98,17 +100,28 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
     }
   }, [isOpen]);
 
-  // Carregar usuários do setor para gestores
+  // Carregar usuários do setor/subsetor para gestores
   useEffect(() => {
     const loadUsers = async () => {
       if (!isOpen) return;
       if (isManager && profile?.sector_id) {
-        const { data } = await supabase
+        let query = supabase
           .from("profiles")
-          .select("id, full_name")
+          .select("id, full_name, subsector_id")
           .eq("sector_id", profile.sector_id)
           .order("full_name");
+        
+        // Se estiver criando para um subsetor específico, filtrar apenas usuários desse subsetor
+        if (subsectorId && !activity) {
+          query = query.eq("subsector_id", subsectorId);
+        } else if (activity && activity.subsector_id) {
+          // Se estiver editando, filtrar pelo subsetor da atividade
+          query = query.eq("subsector_id", activity.subsector_id);
+        }
+        
+        const { data } = await query;
         let list = (data as Array<{ id: string; full_name: string }>) || [];
+        
         // Garante que o usuário atual apareça na lista (caso RLS filtre algo)
         if (
           user &&
@@ -130,7 +143,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
       }
     };
     loadUsers();
-  }, [isManager, profile?.sector_id, isOpen, user]);
+  }, [isManager, profile?.sector_id, isOpen, user, subsectorId, activity]);
 
   const handleSave = () => {
     const updatedActivity: Partial<Activity> = {
@@ -272,19 +285,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
               </div>
             )}
 
-            {/* Privacidade */}
-            <div className="flex items-center gap-2 pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60">
-              <input
-                id="isPrivate"
-                type="checkbox"
-                checked={isPrivate}
-                onChange={(e) => setIsPrivate(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="isPrivate">
-                Privada (visível apenas para você e seu gestor)
-              </Label>
-            </div>
+
 
             {/* Checklist Manager */}
             <div className="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60">
