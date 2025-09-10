@@ -57,11 +57,22 @@ export function useArchivedActivities() {
         .eq("status", "archived")
         .order("created_at", { ascending: false });
 
-      if (profile.role === "collaborator" && profile.subsector_id) {
-        // Colaborador: ver arquivadas do seu subsetor OU quaisquer atividades criadas por ele (inclui privadas)
-        query = query.or(
-          `subsector_id.eq.${profile.subsector_id},created_by.eq.${profile.id}`
-        );
+      if (profile.role === "collaborator") {
+        // Buscar subsetores do colaborador
+        const { data: userSubsectors } = await supabase
+          .from("profile_subsectors")
+          .select("subsector_id")
+          .eq("profile_id", profile.id);
+
+        const subsectorIds = userSubsectors?.map(ps => ps.subsector_id) || [];
+        
+        // Construir filtro para múltiplos subsetores
+        if (subsectorIds.length > 0) {
+          query = query.in("subsector_id", subsectorIds);
+        } else if (profile.subsector_id) {
+          // Fallback para subsetor principal
+          query = query.eq("subsector_id", profile.subsector_id);
+        }
       }
 
       const { data, error: fetchError } = await query;

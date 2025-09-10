@@ -6,6 +6,7 @@ import { CollaboratorCards } from "@/components/activities/CollaboratorCards";
 import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { useActivities } from "@/hooks/useActivities";
 import { useActivityOperations } from "@/hooks/useActivityOperations";
+
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ const Subsector = () => {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
   // No collaborator grouping here; just create for this subsetor
 
   const { createActivity, updateActivity, archiveActivity } =
@@ -108,6 +110,10 @@ const Subsector = () => {
 
       const success = await createActivity(createData);
       if (success) {
+        // Salvar múltiplos responsáveis se houver
+        if (activityData.assignee_ids && activityData.assignee_ids.length > 0) {
+          await saveMultipleAssignees(success.id, activityData.assignee_ids);
+        }
         // Se a atividade foi criada e tem subtasks, salvar as subtasks
         if (activityData.subtasks && activityData.subtasks.length > 0) {
           await saveActivitySubtasks(success.id, activityData.subtasks);
@@ -130,6 +136,10 @@ const Subsector = () => {
 
       const success = await updateActivity(updateData);
       if (success) {
+        // Salvar múltiplos responsáveis se houver
+        if (activityData.assignee_ids) {
+          await saveMultipleAssignees(selectedActivity.id, activityData.assignee_ids);
+        }
         // Salvar subtasks se houver
         if (activityData.subtasks) {
           await saveActivitySubtasks(
@@ -141,6 +151,41 @@ const Subsector = () => {
         refetch();
         setIsModalOpen(false);
       }
+    }
+  };
+
+  // Função para salvar múltiplos responsáveis
+  const saveMultipleAssignees = async (
+    activityId: string,
+    assigneeIds: string[]
+  ) => {
+    try {
+      // Remover responsáveis existentes
+      await supabase
+        .from("activity_assignees")
+        .delete()
+        .eq("activity_id", activityId);
+
+      // Inserir novos responsáveis
+      if (assigneeIds.length > 0) {
+        const { error } = await supabase
+          .from("activity_assignees")
+          .insert(
+            assigneeIds.map(userId => ({
+              activity_id: activityId,
+              user_id: userId
+            }))
+          );
+
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Erro ao salvar responsáveis:", error);
+      toast({
+        title: "Erro ao salvar responsáveis",
+        description: "Não foi possível salvar os responsáveis da atividade.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -217,8 +262,7 @@ const Subsector = () => {
         <Card>
           <CardContent className="p-6 text-center">
             <p className="text-muted-foreground">
-              O subsetor que você está procurando não foi encontrado ou você não
-              tem permissão para acessá-lo.
+              O subsetor que você está procurando não foi encontrado.
             </p>
             <Button
               variant="outline"
@@ -290,6 +334,7 @@ const Subsector = () => {
         }}
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
+        subsectorId={id}
       />
     </div>
   );

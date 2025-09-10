@@ -17,7 +17,7 @@ export function useIndexActivitiesStable() {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("activities")
         .select(`
           *,
@@ -40,9 +40,51 @@ export function useIndexActivitiesStable() {
         .neq("status", "archived")
         .order("created_at", { ascending: false });
 
+      // Se for colaborador, filtrar por seus subsetores
+      if (profile.role === "collaborator") {
+        // Buscar subsetores do colaborador
+        const { data: userSubsectors } = await supabase
+          .from("profile_subsectors")
+          .select("subsector_id")
+          .eq("profile_id", profile.id);
+
+        const subsectorIds = userSubsectors?.map(ps => ps.subsector_id) || [];
+        
+        // Se tem múltiplos subsetores, usar eles
+        if (subsectorIds.length > 0) {
+          query = query.in("subsector_id", subsectorIds);
+        } else if (profile.subsector_id) {
+          // Senão, usar o subsetor principal
+          query = query.eq("subsector_id", profile.subsector_id);
+        }
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
 
-      setActivities((data as unknown as Activity[]) || []);
+      // Buscar assignees para cada atividade
+      const activitiesWithAssignees = await Promise.all(
+        (data || []).map(async (activity) => {
+          const { data: assignees } = await supabase
+            .from('activity_assignees')
+            .select(`
+              user_id,
+              profiles (
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('activity_id', activity.id);
+          
+          return {
+            ...activity,
+            activity_assignees: assignees || []
+          };
+        })
+      );
+
+      setActivities((activitiesWithAssignees as unknown as Activity[]) || []);
     } catch (error) {
       console.error("❌ Erro ao carregar atividades:", error);
       setActivities([]);
@@ -50,7 +92,7 @@ export function useIndexActivitiesStable() {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [profile?.sector_id]);
+  }, [profile?.sector_id, profile?.role, profile?.id, profile?.subsector_id]);
 
   // Initial fetch
   useEffect(() => {

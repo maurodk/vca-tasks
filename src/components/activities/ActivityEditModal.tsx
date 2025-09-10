@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Select,
   SelectContent,
@@ -49,7 +50,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   >("pending");
   const [subtasks, setSubtasks] = useState<Activity["subtasks"]>([]);
 
-  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>(
     []
@@ -57,37 +58,55 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (activity) {
-      setTitle(activity.title || "");
-      setDescription(activity.description || "");
-      setDueDate(
-        activity.due_date
-          ? new Date(activity.due_date).toISOString().split("T")[0]
-          : ""
-      );
-      setPriority(activity.priority || "medium");
-      setStatus(activity.status || "pending");
-      setSubtasks(activity.subtasks || []);
-      setAssigneeId(activity.user_id || user?.id || "");
-      // leitura defensiva de campo opcional
-      const maybePrivate = (activity as unknown as { is_private?: boolean })
-        .is_private;
-      setIsPrivate(Boolean(maybePrivate));
-    } else {
-      // Modo de criação
-      setTitle("");
-      setDescription("");
-      setDueDate(
-        defaultDueDate
-          ? new Date(defaultDueDate).toISOString().split("T")[0]
-          : ""
-      );
-      setPriority("medium");
-      setStatus("pending");
-      setSubtasks([]);
-      setAssigneeId(user?.id || "");
-      setIsPrivate(false);
-    }
+    const loadActivityData = async () => {
+      if (activity) {
+        setTitle(activity.title || "");
+        setDescription(activity.description || "");
+        setDueDate(
+          activity.due_date
+            ? new Date(activity.due_date).toISOString().split("T")[0]
+            : ""
+        );
+        setPriority(activity.priority || "medium");
+        setStatus(activity.status || "pending");
+        setSubtasks(activity.subtasks || []);
+        
+        // Carregar múltiplos responsáveis da tabela activity_assignees
+        try {
+          const { data: assignees } = await supabase
+            .from("activity_assignees")
+            .select("user_id")
+            .eq("activity_id", activity.id);
+          
+          const assigneeIds = assignees?.map(a => a.user_id) || [];
+          // Se não há responsáveis na nova tabela, usar o user_id antigo
+          setAssigneeIds(assigneeIds.length > 0 ? assigneeIds : (activity.user_id ? [activity.user_id] : []));
+        } catch (error) {
+          console.error("Erro ao carregar responsáveis:", error);
+          setAssigneeIds(activity.user_id ? [activity.user_id] : []);
+        }
+        
+        const maybePrivate = (activity as unknown as { is_private?: boolean })
+          .is_private;
+        setIsPrivate(Boolean(maybePrivate));
+      } else {
+        // Modo de criação
+        setTitle("");
+        setDescription("");
+        setDueDate(
+          defaultDueDate
+            ? new Date(defaultDueDate).toISOString().split("T")[0]
+            : ""
+        );
+        setPriority("medium");
+        setStatus("pending");
+        setSubtasks([]);
+        setAssigneeIds(user?.id ? [user.id] : []);
+        setIsPrivate(false);
+      }
+    };
+    
+    loadActivityData();
   }, [activity, defaultDueDate, user?.id]);
 
   // Resetar campos sempre que abrir em modo de criação (activity === null)
@@ -103,7 +122,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
       setPriority("medium");
       setStatus("pending");
       setSubtasks([]);
-      setAssigneeId(user?.id || "");
+      setAssigneeIds(user?.id ? [user.id] : []);
       setIsPrivate(false);
     }
   }, [isOpen, activity, defaultDueDate, user?.id]);
@@ -127,24 +146,53 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
     const loadUsers = async () => {
       if (!isOpen) return;
       if (isManager && profile?.sector_id) {
-        let query = supabase
-          .from("profiles")
-          .select("id, full_name, subsector_id")
-          .eq("sector_id", profile.sector_id)
-          .order("full_name");
+        let list: Array<{ id: string; full_name: string }> = [];
+        
+        // Usar subsectorId da prop ou da atividade existente
+        const targetSubsectorId = subsectorId || activity?.subsector_id;
 
-        // Se estiver criando para um subsetor específico, filtrar apenas usuários desse subsetor
-        if (subsectorId && !activity) {
-          query = query.eq("subsector_id", subsectorId);
-        } else if (activity && activity.subsector_id) {
-          // Se estiver editando, filtrar pelo subsetor da atividade
-          query = query.eq("subsector_id", activity.subsector_id);
+        if (targetSubsectorId) {
+          // Buscar usuários do subsetor específico via nova tabela
+          const { data: profileSubsectors } = await supabase
+            .from("profile_subsectors")
+            .select(`
+              profile_id,
+              profiles (
+                id,
+                full_name,
+                sector_id
+              )
+            `)
+            .eq("subsector_id", targetSubsectorId);
+
+          const usersFromNew = profileSubsectors
+            ?.filter(ps => ps.profiles?.sector_id === profile.sector_id)
+            .map(ps => ps.profiles)
+            .filter(Boolean) || [];
+
+          // Buscar também usuários com subsector_id antigo (compatibilidade)
+          const { data: oldUsers } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .eq("sector_id", profile.sector_id)
+            .eq("subsector_id", targetSubsectorId);
+
+          // Combinar e remover duplicatas
+          const allUsers = [...usersFromNew, ...(oldUsers || [])];
+          list = allUsers.filter((user, index, arr) => 
+            arr.findIndex(u => u.id === user.id) === index
+          );
+        } else {
+          // Sem subsetor específico, buscar todos do setor
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .eq("sector_id", profile.sector_id)
+            .order("full_name");
+          list = data || [];
         }
 
-        const { data } = await query;
-        let list = (data as Array<{ id: string; full_name: string }>) || [];
-
-        // Garante que o usuário atual apareça na lista (caso RLS filtre algo)
+        // Garante que o usuário atual apareça na lista
         if (
           user &&
           !list.find((u) => u.id === user.id) &&
@@ -155,7 +203,8 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
             { id: user.id, full_name: user.user_metadata.full_name },
           ];
         }
-        setUsers(list);
+
+        setUsers(list.sort((a, b) => a.full_name.localeCompare(b.full_name)));
       } else if (user) {
         // Colaborador: apenas ele mesmo
         const fullName =
@@ -179,7 +228,8 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         status,
         subtasks: subtasks,
         is_private: isPrivate,
-        user_id: assigneeId || user?.id,
+        user_id: assigneeIds[0] || user?.id,
+        assignee_ids: assigneeIds,
       };
 
       await onSave(updatedActivity);
@@ -260,7 +310,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="z-[200]">
+                  <SelectContent className="z-[250]">
                     <SelectItem value="pending">Pendente</SelectItem>
                     <SelectItem value="in_progress">Em Andamento</SelectItem>
                     <SelectItem value="completed">Concluída</SelectItem>
@@ -277,7 +327,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="z-[200]">
+                  <SelectContent className="z-[250]">
                     <SelectItem value="low">Baixa</SelectItem>
                     <SelectItem value="medium">Média</SelectItem>
                     <SelectItem value="high">Alta</SelectItem>
@@ -287,19 +337,13 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
 
               {isManager && !isCreatingForPrivateList && (
                 <div className="space-y-2">
-                  <Label>Responsável</Label>
-                  <Select value={assigneeId} onValueChange={setAssigneeId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um usuário" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[200]">
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Responsáveis</Label>
+                  <MultiSelect
+                    options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                    selected={assigneeIds}
+                    onChange={setAssigneeIds}
+                    placeholder="Selecione responsáveis"
+                  />
                 </div>
               )}
             </div>

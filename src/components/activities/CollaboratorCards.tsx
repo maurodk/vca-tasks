@@ -32,14 +32,44 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
     const fetchCollaborators = async () => {
       if (!profile?.sector_id || !subsectorId) return;
       try {
-        const { data, error } = await supabase
+        // Buscar colaboradores que têm este subsetor (nova tabela)
+        const { data: profileSubsectors, error: psError } = await supabase
+          .from("profile_subsectors")
+          .select(`
+            profile_id,
+            profiles (
+              id,
+              full_name,
+              avatar_url,
+              sector_id
+            )
+          `)
+          .eq("subsector_id", subsectorId);
+
+        if (psError) throw psError;
+
+        // Filtrar por setor e extrair profiles
+        const collaboratorsFromNew = profileSubsectors
+          ?.filter(ps => ps.profiles?.sector_id === profile.sector_id)
+          .map(ps => ps.profiles)
+          .filter(Boolean) || [];
+
+        // Buscar também colaboradores com subsector_id antigo (compatibilidade)
+        const { data: oldCollaborators, error: oldError } = await supabase
           .from("profiles")
           .select("id, full_name, avatar_url")
           .eq("sector_id", profile.sector_id)
-          .eq("subsector_id", subsectorId)
-          .order("full_name");
-        if (error) throw error;
-        setCollaborators(data || []);
+          .eq("subsector_id", subsectorId);
+
+        if (oldError) throw oldError;
+
+        // Combinar e remover duplicatas
+        const allCollaborators = [...collaboratorsFromNew, ...(oldCollaborators || [])];
+        const uniqueCollaborators = allCollaborators.filter((colab, index, arr) => 
+          arr.findIndex(c => c.id === colab.id) === index
+        );
+
+        setCollaborators(uniqueCollaborators.sort((a, b) => a.full_name.localeCompare(b.full_name)));
       } catch (e) {
         console.error("Erro ao buscar colaboradores:", e);
         setCollaborators([]);

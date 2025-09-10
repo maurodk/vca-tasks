@@ -24,6 +24,7 @@ export type Activity = ActivityRow & {
   profiles?: ProfileData | null;
   subsectors?: SubsectorData | null;
   subtasks?: Subtask[];
+  assignees?: Array<{ user_id: string; profiles: ProfileData }>;
 };
 
 // 2. Tipo 'ActivityStatus' derivado diretamente do Enum do DB
@@ -74,6 +75,13 @@ export function useActivities(options: UseActivitiesOptions = {}) {
             order_index,
             created_at,
             updated_at
+          ),
+          activity_assignees (
+            user_id,
+            profiles (
+              full_name,
+              avatar_url
+            )
           )
         `
         )
@@ -83,9 +91,22 @@ export function useActivities(options: UseActivitiesOptions = {}) {
       // Aplicar filtros baseados no role e opções
       if (options.subsectorId) {
         query = query.eq("subsector_id", options.subsectorId);
-      } else if (profile.role === "collaborator" && profile.subsector_id) {
-        // Colaboradores veem apenas atividades do seu subsetor
-        query = query.eq("subsector_id", profile.subsector_id);
+      } else if (profile.role === "collaborator") {
+        // Buscar subsetores do colaborador
+        const { data: userSubsectors } = await supabase
+          .from("profile_subsectors")
+          .select("subsector_id")
+          .eq("profile_id", profile.id);
+
+        const subsectorIds = userSubsectors?.map(ps => ps.subsector_id) || [];
+        
+        // Se tem múltiplos subsetores, usar eles
+        if (subsectorIds.length > 0) {
+          query = query.in("subsector_id", subsectorIds);
+        } else if (profile.subsector_id) {
+          // Senão, usar o subsetor principal
+          query = query.eq("subsector_id", profile.subsector_id);
+        }
       }
 
       if (options.userId) {
@@ -103,8 +124,29 @@ export function useActivities(options: UseActivitiesOptions = {}) {
 
       if (fetchError) throw fetchError;
 
+      // Buscar assignees separadamente para cada atividade
+      const activitiesWithAssignees = await Promise.all(
+        (data || []).map(async (activity) => {
+          const { data: assignees } = await supabase
+            .from('activity_assignees')
+            .select(`
+              user_id,
+              profiles (
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('activity_id', activity.id);
+          
+          return {
+            ...activity,
+            activity_assignees: assignees || []
+          };
+        })
+      );
+
       // Conversão usando unknown primeiro
-      setActivities((data as unknown as Activity[]) || []);
+      setActivities((activitiesWithAssignees as unknown as Activity[]) || []);
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message);
@@ -120,6 +162,7 @@ export function useActivities(options: UseActivitiesOptions = {}) {
     profile?.sector_id,
     profile?.role,
     profile?.subsector_id,
+    profile?.id,
     options,
     toast,
   ]);

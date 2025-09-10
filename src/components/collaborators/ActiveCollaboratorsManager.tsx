@@ -35,9 +35,19 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuthFinal";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-// import { CollaboratorDetailsModal } from "./CollaboratorDetailsModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { MultiSelect } from "@/components/ui/multi-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useMultipleSubsectors } from "@/hooks/useMultipleSubsectors";
 
 interface Collaborator {
   id: string;
@@ -56,6 +66,12 @@ interface Collaborator {
   subsectors?: {
     name: string;
   };
+  profile_subsectors?: Array<{
+    subsector_id: string;
+    subsectors?: {
+      name: string;
+    };
+  }>;
 }
 
 const ActiveCollaboratorsManager: React.FC = () => {
@@ -85,6 +101,13 @@ const ActiveCollaboratorsManager: React.FC = () => {
   };
   const [activities, setActivities] = useState<LocalActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editingSector, setEditingSector] = useState<string>("");
+  const [editingSubsectors, setEditingSubsectors] = useState<string[]>([]);
+  const [sectors, setSectors] = useState<Array<{id: string, name: string}>>([]);
+  const [allSubsectors, setAllSubsectors] = useState<Array<{id: string, name: string, sector_id: string}>>([]);
+  const [saving, setSaving] = useState(false);
+  const { subsectors: profileSubsectors, updateSubsectors } = useMultipleSubsectors(selectedCollaborator?.id);
 
   const fetchCollaborators = useCallback(async () => {
     if (!profile?.sector_id) return;
@@ -111,6 +134,12 @@ const ActiveCollaboratorsManager: React.FC = () => {
           ),
           subsectors (
             name
+          ),
+          profile_subsectors (
+            subsector_id,
+            subsectors (
+              name
+            )
           )
         `
         )
@@ -135,17 +164,52 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
   useEffect(() => {
     fetchCollaborators();
+    fetchSectors();
+    fetchAllSubsectors();
   }, [profile?.sector_id, fetchCollaborators]);
+
+  const fetchSectors = async () => {
+    try {
+      const { data } = await supabase
+        .from("sectors")
+        .select("id, name")
+        .order("name");
+      setSectors(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar setores:", error);
+    }
+  };
+
+  const fetchAllSubsectors = async () => {
+    try {
+      const { data } = await supabase
+        .from("subsectors")
+        .select("id, name, sector_id")
+        .order("name");
+      setAllSubsectors(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar subsetores:", error);
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return collaborators.filter((c) => {
       const matchName = q ? c.full_name.toLowerCase().includes(q) : true;
-      const matchSub =
-        subsectorFilter === "all" || !subsectorFilter
-          ? true
-          : (c.subsectors?.name || "") === subsectorFilter;
-      return matchName && matchSub;
+      
+      if (subsectorFilter === "all" || !subsectorFilter) {
+        return matchName;
+      }
+      
+      // Verificar se tem o subsetor nos múltiplos subsetores
+      const hasInMultiple = c.profile_subsectors?.some(
+        ps => ps.subsectors?.name === subsectorFilter
+      );
+      
+      // Verificar se tem no subsetor principal (compatibilidade)
+      const hasInPrimary = c.subsectors?.name === subsectorFilter;
+      
+      return matchName && (hasInMultiple || hasInPrimary);
     });
   }, [collaborators, query, subsectorFilter]);
 
@@ -214,8 +278,58 @@ const ActiveCollaboratorsManager: React.FC = () => {
   const handleViewDetails = (collaborator: Collaborator) => {
     setSelectedCollaborator(collaborator);
     setModalOpen(true);
-    // Buscar atividades quando abrir o modal
+    setEditMode(false);
+    setEditingSector(collaborator.sector_id);
+    // Será atualizado pelo hook useMultipleSubsectors
     fetchCollaboratorActivities(collaborator.id);
+  };
+
+  // Atualizar editingSubsectors quando profileSubsectors mudar
+  useEffect(() => {
+    if (profileSubsectors.length > 0) {
+      setEditingSubsectors(profileSubsectors);
+    } else if (selectedCollaborator?.subsector_id) {
+      setEditingSubsectors([selectedCollaborator.subsector_id]);
+    }
+  }, [profileSubsectors, selectedCollaborator]);
+
+  const handleSaveChanges = async () => {
+    if (!selectedCollaborator) return;
+    
+    setSaving(true);
+    try {
+      // Atualizar setor e subsetor principal (compatibilidade)
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          sector_id: editingSector,
+          subsector_id: editingSubsectors[0] || null,
+        })
+        .eq("id", selectedCollaborator.id);
+
+      if (error) throw error;
+
+      // Atualizar múltiplos subsetores
+      const success = await updateSubsectors(editingSubsectors);
+      if (!success) throw new Error('Falha ao atualizar subsetores');
+
+      toast({
+        title: "Sucesso",
+        description: "Colaborador atualizado com sucesso.",
+      });
+      
+      setEditMode(false);
+      fetchCollaborators();
+    } catch (error) {
+      console.error("Erro ao atualizar colaborador:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o colaborador.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -385,17 +499,25 @@ const ActiveCollaboratorsManager: React.FC = () => {
     </SkeletonCard>
   );
 
-  const uniqueSubsectors = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          collaborators
-            .map((c) => c.subsectors?.name || "")
-            .filter((n) => n && n.length)
-        )
-      ).sort(),
-    [collaborators]
-  );
+  const uniqueSubsectors = useMemo(() => {
+    const subsectorNames = new Set<string>();
+    
+    collaborators.forEach((c) => {
+      // Adicionar subsetor principal
+      if (c.subsectors?.name) {
+        subsectorNames.add(c.subsectors.name);
+      }
+      
+      // Adicionar múltiplos subsetores
+      c.profile_subsectors?.forEach((ps) => {
+        if (ps.subsectors?.name) {
+          subsectorNames.add(ps.subsectors.name);
+        }
+      });
+    });
+    
+    return Array.from(subsectorNames).filter(name => name.length > 0).sort();
+  }, [collaborators]);
 
   const groupedByDate = useMemo(() => {
     const acc: Record<string, LocalActivity[]> = {};
@@ -491,7 +613,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
               {filtered.map((collaborator) => (
                 <div
                   key={collaborator.id}
-                  className="group relative overflow-hidden rounded-lg border bg-card p-4 hover-transition hover:bg-[#09b230]/5 cursor-pointer hover:border-[#09b230]/30 animate-fade-in dark:bg-[#1f1f1f] dark:border-gray-800"
+                  className="group relative overflow-hidden rounded-lg border bg-card p-4 hover-transition hover:bg-[#09b230]/5 cursor-pointer hover:border-[#09b230]/30 animate-fade-in dark:bg-[#1f1f1f] dark:border-gray-800 min-h-[140px]"
                   onClick={() => handleViewDetails(collaborator)}
                 >
                   <div className="flex items-start gap-3">
@@ -573,7 +695,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
         {modalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div
-              className="bg-background border shadow-2xl rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-in fade-in-0 zoom-in-95 duration-300"
+              className="bg-background border shadow-2xl rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col animate-in fade-in-0 zoom-in-95 duration-300"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -618,7 +740,18 @@ const ActiveCollaboratorsManager: React.FC = () => {
                                 {selectedCollaborator.sectors.name}
                               </Badge>
                             )}
-                            {selectedCollaborator.subsectors && (
+                              {/* Mostrar múltiplos subsetores */}
+                            {selectedCollaborator.profile_subsectors && selectedCollaborator.profile_subsectors.length > 0 ? (
+                              selectedCollaborator.profile_subsectors.map((ps: any, index: number) => (
+                                <Badge
+                                  key={index}
+                                  variant="outline"
+                                  className="border-secondary/20"
+                                >
+                                  {ps.subsectors?.name}
+                                </Badge>
+                              ))
+                            ) : selectedCollaborator.subsectors && (
                               <Badge
                                 variant="outline"
                                 className="border-secondary/20"
@@ -643,7 +776,43 @@ const ActiveCollaboratorsManager: React.FC = () => {
               </div>
 
               {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[70vh] dark:bg-[#0f0f0f]">
+              <div className="p-6 overflow-y-auto flex-1 dark:bg-[#0f0f0f]">
+                {/* Edit Form */}
+                {editMode && selectedCollaborator && (
+                  <Card className="mb-6 dark:bg-[#1f1f1f] dark:border-gray-800">
+                    <CardHeader>
+                      <CardTitle>Editar Colaborador</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Setor</Label>
+                        <Select value={editingSector} onValueChange={setEditingSector}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um setor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sectors.map((sector) => (
+                              <SelectItem key={sector.id} value={sector.id}>
+                                {sector.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Subsetores</Label>
+                        <MultiSelect
+                          options={allSubsectors
+                            .filter(s => s.sector_id === editingSector)
+                            .map(s => ({ value: s.id, label: s.name }))}
+                          selected={editingSubsectors}
+                          onChange={setEditingSubsectors}
+                          placeholder="Selecione subsetores"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 {/* Statistics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   {/* Total de Atividades: Cinza */}
@@ -757,7 +926,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="border-t bg-muted/30 px-6 py-4 dark:bg-[#1f1f1f]">
+              <div className="border-t bg-muted/30 px-6 py-6 dark:bg-[#1f1f1f] min-h-[80px]">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
                     Membro desde{" "}
@@ -772,13 +941,42 @@ const ActiveCollaboratorsManager: React.FC = () => {
                       : ""}
                   </div>
                   <div className="flex space-x-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setModalOpen(false)}
-                    >
-                      Fechar
-                    </Button>
+                    {editMode ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditMode(false)}
+                          disabled={saving}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveChanges}
+                          disabled={saving}
+                        >
+                          {saving ? "Salvando..." : "Salvar"}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditMode(true)}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setModalOpen(false)}
+                        >
+                          Fechar
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

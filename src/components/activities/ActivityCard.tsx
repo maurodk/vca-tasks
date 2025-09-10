@@ -243,13 +243,41 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
         </div>
       )}
 
-      {/* Usuário responsável */}
-      {activity.profiles && (
-        <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-          <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
-          <span>{activity.profiles.full_name || "Usuário"}</span>
-        </div>
-      )}
+      {/* Usuários responsáveis */}
+      {(() => {
+        const assignees = activity.activity_assignees || [];
+        const fallbackUser = activity.profiles;
+        
+
+        
+        if (assignees.length > 0) {
+          const firstAssignee = assignees[0]?.profiles?.full_name || "Usuário";
+          const additionalCount = assignees.length - 1;
+          
+          return (
+            <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+              <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+              <span>
+                {firstAssignee}
+                {additionalCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-full text-[10px] font-medium">
+                    +{additionalCount}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        } else if (fallbackUser) {
+          return (
+            <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+              <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+              <span>{fallbackUser.full_name || "Usuário"}</span>
+            </div>
+          );
+        }
+        
+        return null;
+      })()}
     </div>
   );
 }

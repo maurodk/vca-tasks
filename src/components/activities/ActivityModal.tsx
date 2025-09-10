@@ -59,6 +59,7 @@ import { Activity, useActivities } from "@/hooks/useActivities";
 import { SubtaskManager } from "@/components/activities/SubtaskManager";
 import { Separator } from "@/components/ui/separator";
 import { useSubtasks } from "@/hooks/useSubtasks";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 const activitySchema = z.object({
   title: z.string().min(1, "Título é obrigatório"),
@@ -135,6 +136,7 @@ export function ActivityModal({
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [subsectors, setSubsectors] = useState<Subsector[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [tempSubtasks, setTempSubtasks] = useState<
     Array<{
       id: string;
@@ -204,6 +206,7 @@ export function ActivityModal({
         user_id: activity.user_id || user?.id || "",
         subsector_id: activity.subsector_id || "",
       });
+      setSelectedUsers(activity.user_id ? [activity.user_id] : []);
     } else {
       form.reset({
         title: "",
@@ -214,21 +217,22 @@ export function ActivityModal({
         user_id: user?.id || "",
         subsector_id: defaultSubsectorId || "",
       });
+      setSelectedUsers(user?.id ? [user.id] : []);
     }
   }, [activity, user?.id, defaultSubsectorId, getDefaultDueDate, form]);
 
   // Auto-fill subsector when user is selected
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      if (name === "user_id" && value.user_id && isManager) {
-        const selectedUser = users.find((u) => u.id === value.user_id);
+      if (name === "user_id" && value.user_id && isManager && selectedUsers.length === 1) {
+        const selectedUser = users.find((u) => u.id === selectedUsers[0]);
         if (selectedUser?.subsector_id) {
           form.setValue("subsector_id", selectedUser.subsector_id);
         }
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, users, isManager]);
+  }, [form, users, isManager, selectedUsers]);
 
   const onSubmit = async (data: ActivityFormData) => {
     if (!profile?.sector_id) return;
@@ -514,7 +518,7 @@ export function ActivityModal({
                           <SelectValue placeholder="Selecione a prioridade" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="z-[250]">
                         {Object.entries(priorityLabels).map(
                           ([value, label]) => (
                             <SelectItem key={value} value={value}>
@@ -601,7 +605,7 @@ export function ActivityModal({
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[250]" align="start">
                       <CalendarComponent
                         mode="single"
                         selected={field.value}
@@ -622,39 +626,19 @@ export function ActivityModal({
             />
 
             {isManager && users.length > 0 && !isCreatingForPrivateList && (
-              <FormField
-                control={form.control}
-                name="user_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Atribuir para</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      disabled={readOnly || (isEditing && !isEditMode)}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="focus:border-[#09b230] focus:ring-[#09b230] focus-visible:ring-[#09b230]">
-                          <SelectValue placeholder="Selecione um usuário" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              <span className="font-medium">
-                                {user.full_name}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Responsáveis</label>
+                <MultiSelect
+                  options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                  selected={selectedUsers}
+                  onChange={(selected) => {
+                    setSelectedUsers(selected);
+                    form.setValue("user_id", selected[0] || "");
+                  }}
+                  placeholder="Selecione responsáveis"
+                  disabled={readOnly || (isEditing && !isEditMode)}
+                />
+              </div>
             )}
 
             {subsectors.length > 0 && (
@@ -708,7 +692,7 @@ export function ActivityModal({
                             <SelectValue placeholder="Selecione um subsetor (opcional)" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="z-[250]">
                           {subsectors.map((subsector) => (
                             <SelectItem key={subsector.id} value={subsector.id}>
                               {subsector.name}

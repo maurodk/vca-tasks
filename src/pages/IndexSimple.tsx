@@ -148,8 +148,15 @@ const IndexSimple = () => {
           Boolean(creatingListId),
       };
 
+      const assigneeIds = (activityData as any).assignee_ids || [];
+
       const success = await createActivity(createData);
       if (success) {
+        // Salvar múltiplos responsáveis se houver
+        if (assigneeIds.length > 1) {
+          await saveMultipleAssignees(success.id, assigneeIds);
+        }
+        
         if (creatingListId) {
           await updateActivity({ id: success.id, list_id: creatingListId });
           window.dispatchEvent(
@@ -187,8 +194,14 @@ const IndexSimple = () => {
           .is_private,
       };
 
+      const assigneeIds = (activityData as any).assignee_ids || [];
+
       const success = await updateActivity(updateData);
       if (success) {
+        // Atualizar múltiplos responsáveis
+        if (assigneeIds.length > 0) {
+          await saveMultipleAssignees(selectedActivity.id, assigneeIds);
+        }
         if (activityData.subtasks) {
           await saveActivitySubtasks(
             selectedActivity.id,
@@ -213,6 +226,34 @@ const IndexSimple = () => {
         refetch();
         setIsModalOpen(false);
       }
+    }
+  };
+
+  const saveMultipleAssignees = async (
+    activityId: string,
+    assigneeIds: string[]
+  ) => {
+    try {
+      // Remover responsáveis existentes
+      await supabase
+        .from("activity_assignees")
+        .delete()
+        .eq("activity_id", activityId);
+
+      // Adicionar novos responsáveis
+      if (assigneeIds.length > 0) {
+        const { error } = await supabase
+          .from("activity_assignees")
+          .insert(
+            assigneeIds.map(userId => ({
+              activity_id: activityId,
+              user_id: userId
+            }))
+          );
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error("Erro ao salvar responsáveis:", error);
     }
   };
 

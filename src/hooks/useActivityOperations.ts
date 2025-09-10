@@ -171,6 +171,18 @@ export function useActivityOperations() {
 
         if (error) throw error;
 
+        // Criar histórico se foi arquivada
+        if (status === "archived" && user?.id) {
+          await supabase
+            .from("activity_history")
+            .insert({
+              activity_id: activityId,
+              action: "archived",
+              performed_by: user.id,
+              details: `Atividade arquivada por ${profile?.full_name || 'usuário'}`
+            });
+        }
+
         toast({
           title: "Atividade atualizada",
           description: `Status alterado para ${getStatusLabel(status)}.`,
@@ -190,7 +202,7 @@ export function useActivityOperations() {
         return false;
       }
     },
-    [toast]
+    [toast, user, profile]
   );
 
   const archiveActivity = useCallback(

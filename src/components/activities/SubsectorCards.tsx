@@ -30,21 +30,50 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
     const fetchSubsectors = async () => {
       if (!profile?.sector_id) return;
       try {
-        let query = supabase
-          .from("subsectors")
-          .select("id, name")
-          .eq("sector_id", profile.sector_id)
-          .order("name");
+        if (profile.role === "manager") {
+          // Gestores veem todos os subsetores do setor
+          const { data, error } = await supabase
+            .from("subsectors")
+            .select("id, name")
+            .eq("sector_id", profile.sector_id)
+            .order("name");
 
-        // Collaborators: restrict to own subsector
-        if (profile.role === "collaborator" && profile.subsector_id) {
-          query = query.eq("id", profile.subsector_id);
+          if (error) throw error;
+          setSubsectors(data || []);
+        } else if (profile.role === "collaborator") {
+          // Colaboradores veem seus múltiplos subsetores
+          const { data: profileSubsectors, error: psError } = await supabase
+            .from("profile_subsectors")
+            .select(`
+              subsector_id,
+              subsectors (
+                id,
+                name
+              )
+            `)
+            .eq("profile_id", profile.id);
+
+          if (psError) throw psError;
+
+          const multipleSubsectors = profileSubsectors
+            ?.map(ps => ps.subsectors)
+            .filter(Boolean) || [];
+
+          // Se não tem múltiplos subsetores, usar o subsetor principal
+          if (multipleSubsectors.length === 0 && profile.subsector_id) {
+            const { data: primarySubsector, error: primaryError } = await supabase
+              .from("subsectors")
+              .select("id, name")
+              .eq("id", profile.subsector_id)
+              .single();
+
+            if (!primaryError && primarySubsector) {
+              setSubsectors([primarySubsector]);
+            }
+          } else {
+            setSubsectors(multipleSubsectors as Subsector[]);
+          }
         }
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-        setSubsectors(data || []);
       } catch (error) {
         console.error("Erro ao buscar subsetores:", error);
         setSubsectors([]);
@@ -52,7 +81,7 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
     };
 
     fetchSubsectors();
-  }, [profile?.sector_id, profile?.role, profile?.subsector_id]);
+  }, [profile?.sector_id, profile?.role, profile?.subsector_id, profile?.id]);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">

@@ -77,26 +77,57 @@ export function AppSidebar() {
       return;
     }
     try {
-      let query = supabase
-        .from("subsectors")
-        .select("*")
-        .eq("sector_id", profile.sector_id);
+      if (profile.role === "manager") {
+        // Gestores veem todos os subsetores do setor
+        const { data, error } = await supabase
+          .from("subsectors")
+          .select("*")
+          .eq("sector_id", profile.sector_id)
+          .order("name");
 
-      // Se for colaborador, mostrar apenas o seu subsetor
-      if (profile.role === "collaborator" && profile.subsector_id) {
-        query = query.eq("id", profile.subsector_id);
+        if (error) throw error;
+        setSubsectors(data || []);
+      } else if (profile.role === "collaborator") {
+        // Colaboradores veem seus múltiplos subsetores
+        const { data: profileSubsectors, error: psError } = await supabase
+          .from("profile_subsectors")
+          .select(`
+            subsector_id,
+            subsectors (
+              id,
+              name,
+              description
+            )
+          `)
+          .eq("profile_id", profile.id);
+
+        if (psError) throw psError;
+
+        const multipleSubsectors = profileSubsectors
+          ?.map(ps => ps.subsectors)
+          .filter(Boolean) || [];
+
+        // Se não tem múltiplos subsetores, usar o subsetor principal
+        if (multipleSubsectors.length === 0 && profile.subsector_id) {
+          const { data: primarySubsector, error: primaryError } = await supabase
+            .from("subsectors")
+            .select("*")
+            .eq("id", profile.subsector_id)
+            .single();
+
+          if (!primaryError && primarySubsector) {
+            setSubsectors([primarySubsector]);
+          }
+        } else {
+          setSubsectors(multipleSubsectors as Subsector[]);
+        }
       }
-
-      const { data, error } = await query.order("name");
-
-      if (error) throw error;
-      setSubsectors(data || []);
     } catch (error) {
       console.error("Error fetching subsectors:", error);
     } finally {
       setLoading(false);
     }
-  }, [profile?.sector_id, profile?.role, profile?.subsector_id]);
+  }, [profile?.sector_id, profile?.role, profile?.subsector_id, profile?.id]);
 
   useEffect(() => {
     fetchSubsectors();
