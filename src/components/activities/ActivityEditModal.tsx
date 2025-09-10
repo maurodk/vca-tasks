@@ -22,10 +22,11 @@ interface ActivityEditModalProps {
   activity: Activity | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (activity: Partial<Activity>) => void;
+  onSave: (activity: Partial<Activity>) => Promise<void>;
   onDelete?: (activityId: string) => void;
   defaultDueDate?: Date; // opcional: define data inicial ao criar
   subsectorId?: string; // ID do subsetor para filtrar usuários
+  isCreatingForPrivateList?: boolean; // indica se é criação para lista privada
 }
 
 export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
@@ -36,6 +37,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   onDelete,
   defaultDueDate,
   subsectorId,
+  isCreatingForPrivateList = false,
 }) => {
   const { profile, isManager, user } = useAuth();
   const [title, setTitle] = useState("");
@@ -46,11 +48,13 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
     "pending" | "in_progress" | "completed" | "archived"
   >("pending");
   const [subtasks, setSubtasks] = useState<Activity["subtasks"]>([]);
+
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>(
     []
   );
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (activity) {
@@ -86,6 +90,24 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
     }
   }, [activity, defaultDueDate, user?.id]);
 
+  // Resetar campos sempre que abrir em modo de criação (activity === null)
+  useEffect(() => {
+    if (isOpen && !activity) {
+      setTitle("");
+      setDescription("");
+      setDueDate(
+        defaultDueDate
+          ? new Date(defaultDueDate).toISOString().split("T")[0]
+          : ""
+      );
+      setPriority("medium");
+      setStatus("pending");
+      setSubtasks([]);
+      setAssigneeId(user?.id || "");
+      setIsPrivate(false);
+    }
+  }, [isOpen, activity, defaultDueDate, user?.id]);
+
   // ESC fecha modal
   useEscClose(isOpen, onClose);
 
@@ -110,7 +132,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
           .select("id, full_name, subsector_id")
           .eq("sector_id", profile.sector_id)
           .order("full_name");
-        
+
         // Se estiver criando para um subsetor específico, filtrar apenas usuários desse subsetor
         if (subsectorId && !activity) {
           query = query.eq("subsector_id", subsectorId);
@@ -118,10 +140,10 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
           // Se estiver editando, filtrar pelo subsetor da atividade
           query = query.eq("subsector_id", activity.subsector_id);
         }
-        
+
         const { data } = await query;
         let list = (data as Array<{ id: string; full_name: string }>) || [];
-        
+
         // Garante que o usuário atual apareça na lista (caso RLS filtre algo)
         if (
           user &&
@@ -145,20 +167,25 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
     loadUsers();
   }, [isManager, profile?.sector_id, isOpen, user, subsectorId, activity]);
 
-  const handleSave = () => {
-    const updatedActivity: Partial<Activity> = {
-      ...(activity && { id: activity.id }),
-      title,
-      description,
-      due_date: dueDate || null,
-      priority,
-      status,
-      subtasks: subtasks,
-      is_private: isPrivate,
-      user_id: assigneeId || user?.id,
-    };
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updatedActivity: Partial<Activity> = {
+        ...(activity && { id: activity.id }),
+        title,
+        description,
+        due_date: dueDate || null,
+        priority,
+        status,
+        subtasks: subtasks,
+        is_private: isPrivate,
+        user_id: assigneeId || user?.id,
+      };
 
-    onSave(updatedActivity);
+      await onSave(updatedActivity);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -176,7 +203,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         {/* Header */}
         <div className="sticky top-0 bg-background/95 backdrop-blur border-b px-6 py-4 flex items-center justify-between z-[170]">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            {activity ? "Editar Atividade" : "Nova Atividade"}
+            {title || (activity ? "Editar Atividade" : "Nova Atividade")}
             {isPrivate && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                 Privada
@@ -219,7 +246,11 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
             </div>
 
             {/* Campos de controle */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60">
+            <div
+              className={`grid grid-cols-1 gap-4 pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60 ${
+                isCreatingForPrivateList ? "md:grid-cols-2" : "md:grid-cols-3"
+              }`}
+            >
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select
@@ -233,7 +264,6 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
                     <SelectItem value="pending">Pendente</SelectItem>
                     <SelectItem value="in_progress">Em Andamento</SelectItem>
                     <SelectItem value="completed">Concluída</SelectItem>
-                    <SelectItem value="archived">Arquivada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -255,37 +285,24 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="dueDate">Data de Vencimento</Label>
-                <Input
-                  id="dueDate"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
+              {isManager && !isCreatingForPrivateList && (
+                <div className="space-y-2">
+                  <Label>Responsável</Label>
+                  <Select value={assigneeId} onValueChange={setAssigneeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[200]">
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-
-            {/* Somente gestor: atribuição de responsável */}
-            {isManager && (
-              <div className="space-y-2 pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60">
-                <Label>Responsável</Label>
-                <Select value={assigneeId} onValueChange={setAssigneeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um usuário" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[200]">
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-
 
             {/* Checklist Manager */}
             <div className="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800/60">
@@ -313,8 +330,8 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
             <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>
-              {activity ? "Salvar" : "Criar"}
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Salvando..." : activity ? "Salvar" : "Criar"}
             </Button>
           </div>
         </div>

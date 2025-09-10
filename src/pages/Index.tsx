@@ -109,18 +109,6 @@ const Index = () => {
     }
   }, [activities, selectedFilter, todayStart, todayEnd]);
 
-  // Se ainda está carregando auth, mostrar indicador de carregamento
-  if (useAuth().loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
-        <div className="text-center space-y-4 glass-effect p-8 rounded-2xl">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Carregando autenticação...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Se não há perfil, mostrar indicador de carregamento
   if (!profile) {
     return (
@@ -187,20 +175,28 @@ const Index = () => {
       const success = await createActivity(createData);
       if (success) {
         if (creatingListId) {
+          // Primeiro definir o list_id
           await updateActivity({ id: success.id, list_id: creatingListId });
-          // Notify personal list board for instant refresh
+
+          // Depois salvar as subtasks
+          if (activityData.subtasks && activityData.subtasks.length > 0) {
+            await saveActivitySubtasks(success.id, activityData.subtasks);
+          }
+          // Disparar atualização explícita do board da lista privada
           window.dispatchEvent(
-            new CustomEvent("personal-list-updated", {
+            new CustomEvent("personal-list-force-reload", {
               detail: { listId: creatingListId },
             })
           );
+        } else {
+          // Se não é lista privada, salvar subtasks normalmente
+          if (activityData.subtasks && activityData.subtasks.length > 0) {
+            await saveActivitySubtasks(success.id, activityData.subtasks);
+          }
+          await refetch();
         }
-        // Se a atividade foi criada e tem subtasks, salvar as subtasks
-        if (activityData.subtasks && activityData.subtasks.length > 0) {
-          await saveActivitySubtasks(success.id, activityData.subtasks);
-        }
-        // Forçar atualização imediata
-        refetch();
+
+        // Fechar modal apenas após tudo estar completo
         setIsModalOpen(false);
         setNewActivitySubsector(null);
         setCreatingListId(null);
@@ -227,16 +223,25 @@ const Index = () => {
             selectedActivity.id,
             activityData.subtasks
           );
-        }
-        if (selectedActivity.list_id) {
+
+          if (selectedActivity.list_id) {
+            // Disparar evento APENAS após salvar subtasks
+            window.dispatchEvent(
+              new CustomEvent("personal-list-updated", {
+                detail: { listId: selectedActivity.list_id },
+              })
+            );
+          }
+        } else if (selectedActivity.list_id) {
+          // Se não tem subtasks, disparar evento normalmente
           window.dispatchEvent(
             new CustomEvent("personal-list-updated", {
               detail: { listId: selectedActivity.list_id },
             })
           );
         }
-        // Forçar atualização imediata
-        refetch();
+        // Aguardar atualização completa
+        await refetch();
         setIsModalOpen(false);
       }
     }
@@ -248,24 +253,46 @@ const Index = () => {
     subtasks: Subtask[]
   ) => {
     try {
+      console.log("saveActivitySubtasks called with:", {
+        activityId,
+        subtasks,
+      });
+
       // Primeiro, remover todas as subtasks existentes
-      await supabase.from("subtasks").delete().eq("activity_id", activityId);
+      const { error: deleteError } = await supabase
+        .from("subtasks")
+        .delete()
+        .eq("activity_id", activityId);
+      if (deleteError) {
+        console.error("Error deleting existing subtasks:", deleteError);
+        throw deleteError;
+      }
 
       // Depois, inserir as novas subtasks
       if (subtasks.length > 0) {
-        const subtasksToInsert = subtasks.map((subtask, index) => ({
-          activity_id: activityId,
-          title: subtask.title,
-          is_completed: subtask.is_completed,
-          order_index: index,
-          checklist_group: subtask.checklist_group || null,
-        }));
+        const subtasksToInsert = subtasks
+          .filter((subtask) => subtask.title.trim()) // Filtrar apenas subtasks com título
+          .map((subtask, index) => ({
+            activity_id: activityId,
+            title: subtask.title,
+            is_completed: subtask.is_completed,
+            order_index: index,
+            checklist_group: subtask.checklist_group || null,
+          }));
 
-        const { error } = await supabase
-          .from("subtasks")
-          .insert(subtasksToInsert);
+        console.log("Inserting subtasks:", subtasksToInsert);
 
-        if (error) throw error;
+        if (subtasksToInsert.length > 0) {
+          const { error } = await supabase
+            .from("subtasks")
+            .insert(subtasksToInsert);
+
+          if (error) {
+            console.error("Error inserting subtasks:", error);
+            throw error;
+          }
+          console.log("Subtasks inserted successfully");
+        }
       }
     } catch (error) {
       console.error("Erro ao salvar subtasks:", error);
@@ -464,6 +491,7 @@ const Index = () => {
         }}
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
+        isCreatingForPrivateList={Boolean(creatingListId)}
       />
     </div>
   );

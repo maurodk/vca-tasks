@@ -27,10 +27,13 @@ import { Activity } from "@/hooks/useActivities";
 const IndexSimple = () => {
   const { profile } = useAuth();
   const { activities, loading, refetch } = useIndexActivitiesStable();
-  const { createActivity, updateActivity, archiveActivity } = useActivityOperations();
+  const { createActivity, updateActivity, archiveActivity } =
+    useActivityOperations();
   const { toast } = useToast();
   const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+    null
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newActivitySubsector, setNewActivitySubsector] = useState<{
@@ -43,8 +46,16 @@ const IndexSimple = () => {
   const { todayStart, todayEnd } = useMemo(() => {
     const today = new Date();
     return {
-      todayStart: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-      todayEnd: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+      todayStart: new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ),
+      todayEnd: new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1
+      ),
     };
   }, []);
 
@@ -132,17 +143,30 @@ const IndexSimple = () => {
         priority: activityData.priority,
         status: activityData.status,
         user_id: activityData.user_id,
-        is_private: (activityData as unknown as { is_private?: boolean }).is_private ?? Boolean(creatingListId),
+        is_private:
+          (activityData as unknown as { is_private?: boolean }).is_private ??
+          Boolean(creatingListId),
       };
 
       const success = await createActivity(createData);
       if (success) {
         if (creatingListId) {
           await updateActivity({ id: success.id, list_id: creatingListId });
-          window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId: creatingListId } }));
+          window.dispatchEvent(
+            new CustomEvent("personal-list-updated", {
+              detail: { listId: creatingListId },
+            })
+          );
         }
         if (activityData.subtasks && activityData.subtasks.length > 0) {
           await saveActivitySubtasks(success.id, activityData.subtasks);
+          if (creatingListId) {
+            window.dispatchEvent(
+              new CustomEvent("personal-list-force-reload", {
+                detail: { listId: creatingListId },
+              })
+            );
+          }
         }
         // Force immediate refresh
         refetch();
@@ -159,16 +183,31 @@ const IndexSimple = () => {
         priority: activityData.priority,
         status: activityData.status,
         user_id: activityData.user_id,
-        is_private: (activityData as unknown as { is_private?: boolean }).is_private,
+        is_private: (activityData as unknown as { is_private?: boolean })
+          .is_private,
       };
 
       const success = await updateActivity(updateData);
       if (success) {
         if (activityData.subtasks) {
-          await saveActivitySubtasks(selectedActivity.id, activityData.subtasks);
+          await saveActivitySubtasks(
+            selectedActivity.id,
+            activityData.subtasks
+          );
+          if (selectedActivity.list_id) {
+            window.dispatchEvent(
+              new CustomEvent("personal-list-force-reload", {
+                detail: { listId: selectedActivity.list_id },
+              })
+            );
+          }
         }
         if (selectedActivity.list_id) {
-          window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId: selectedActivity.list_id } }));
+          window.dispatchEvent(
+            new CustomEvent("personal-list-updated", {
+              detail: { listId: selectedActivity.list_id },
+            })
+          );
         }
         // Force immediate refresh
         refetch();
@@ -177,7 +216,10 @@ const IndexSimple = () => {
     }
   };
 
-  const saveActivitySubtasks = async (activityId: string, subtasks: Subtask[]) => {
+  const saveActivitySubtasks = async (
+    activityId: string,
+    subtasks: Subtask[]
+  ) => {
     try {
       await supabase.from("subtasks").delete().eq("activity_id", activityId);
 
@@ -190,7 +232,9 @@ const IndexSimple = () => {
           checklist_group: subtask.checklist_group || null,
         }));
 
-        const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
+        const { error } = await supabase
+          .from("subtasks")
+          .insert(subtasksToInsert);
         if (error) throw error;
       }
     } catch (error) {
@@ -207,7 +251,9 @@ const IndexSimple = () => {
     await archiveActivity(activityId);
     const listId = selectedActivity?.list_id || creatingListId || null;
     if (listId) {
-      window.dispatchEvent(new CustomEvent("personal-list-updated", { detail: { listId } }));
+      window.dispatchEvent(
+        new CustomEvent("personal-list-updated", { detail: { listId } })
+      );
     }
     // Force immediate refresh
     refetch();
@@ -222,7 +268,8 @@ const IndexSimple = () => {
             Sistema de Atividades
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
-            Gerencie suas atividades em um board Kanban organizado por subsetores
+            Gerencie suas atividades em um board Kanban organizado por
+            subsetores
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -231,7 +278,11 @@ const IndexSimple = () => {
             onClick={() => setShowCalendar(!showCalendar)}
             className="flex items-center gap-2"
           >
-            {showCalendar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showCalendar ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
             {showCalendar ? "Ocultar" : "Mostrar"} Calendário
           </Button>
         </div>
@@ -249,7 +300,9 @@ const IndexSimple = () => {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <button
-          onClick={() => setSelectedFilter(selectedFilter === null ? null : null)}
+          onClick={() =>
+            setSelectedFilter(selectedFilter === null ? null : null)
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === null
               ? "bg-blue-600 dark:bg-blue-500 text-white shadow-md"
@@ -260,7 +313,9 @@ const IndexSimple = () => {
         </button>
 
         <button
-          onClick={() => setSelectedFilter(selectedFilter === "pending" ? null : "pending")}
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "pending" ? null : "pending")
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "pending"
               ? "bg-blue-500 text-white shadow-md"
@@ -271,7 +326,11 @@ const IndexSimple = () => {
         </button>
 
         <button
-          onClick={() => setSelectedFilter(selectedFilter === "in_progress" ? null : "in_progress")}
+          onClick={() =>
+            setSelectedFilter(
+              selectedFilter === "in_progress" ? null : "in_progress"
+            )
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "in_progress"
               ? "bg-yellow-500 text-white shadow-md"
@@ -282,7 +341,11 @@ const IndexSimple = () => {
         </button>
 
         <button
-          onClick={() => setSelectedFilter(selectedFilter === "completed" ? null : "completed")}
+          onClick={() =>
+            setSelectedFilter(
+              selectedFilter === "completed" ? null : "completed"
+            )
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "completed"
               ? "bg-green-500 text-white shadow-md"
@@ -293,7 +356,9 @@ const IndexSimple = () => {
         </button>
 
         <button
-          onClick={() => setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")}
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "overdue"
               ? "bg-red-500 text-white shadow-md"
@@ -304,7 +369,9 @@ const IndexSimple = () => {
         </button>
 
         <button
-          onClick={() => setSelectedFilter(selectedFilter === "today" ? null : "today")}
+          onClick={() =>
+            setSelectedFilter(selectedFilter === "today" ? null : "today")
+          }
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
             selectedFilter === "today"
               ? "bg-purple-500 text-white shadow-md"
@@ -338,7 +405,11 @@ const IndexSimple = () => {
             selectedFilter === "in_progress" ||
             selectedFilter === "completed" ||
             selectedFilter === "archived"
-              ? (selectedFilter as "pending" | "in_progress" | "completed" | "archived")
+              ? (selectedFilter as
+                  | "pending"
+                  | "in_progress"
+                  | "completed"
+                  | "archived")
               : null
           }
         />
@@ -356,6 +427,7 @@ const IndexSimple = () => {
         onSave={handleSaveActivity}
         onDelete={handleDeleteActivity}
         subsectorId={newActivitySubsector?.id}
+        isCreatingForPrivateList={Boolean(creatingListId)}
       />
     </div>
   );

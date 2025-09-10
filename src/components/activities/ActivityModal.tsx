@@ -81,6 +81,7 @@ interface ActivityModalProps {
   defaultDueDate?: Date; // Novo: para pré-definir data de vencimento
   onRefresh?: () => void; // Para atualizar as atividades após mudanças em subtarefas
   readOnly?: boolean; // Para forçar modo somente leitura (usado para atividades arquivadas)
+  isCreatingForPrivateList?: boolean; // Para identificar criação de atividade privada
 }
 
 interface User {
@@ -105,6 +106,7 @@ export function ActivityModal({
   defaultDueDate,
   onRefresh,
   readOnly = false,
+  isCreatingForPrivateList = false,
 }: ActivityModalProps) {
   const { profile, user, isManager } = useAuth();
   const { toast } = useToast();
@@ -619,7 +621,7 @@ export function ActivityModal({
               )}
             />
 
-            {isManager && users.length > 0 && (
+            {isManager && users.length > 0 && !isCreatingForPrivateList && (
               <FormField
                 control={form.control}
                 name="user_id"

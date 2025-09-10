@@ -47,15 +47,22 @@ export const PersonalListsBoard: React.FC<Props> = ({
       const { data, error } = await supabase
         .from("activities")
         .select(
-          `*, profiles:user_id(full_name, avatar_url), subtasks(id, title, is_completed, checklist_group, order_index)`
+          `*, profiles:user_id(full_name, avatar_url), subtasks(id, title, is_completed, checklist_group, order_index, description, activity_id, created_at, updated_at)`
         )
         .eq("list_id", listId)
         .neq("status", "archived")
         .order("created_at", { ascending: false });
       if (error) throw error;
+      // Order subtasks client-side to ensure stable render
+      const normalized = ((data as unknown as Activity[]) || []).map((a) => ({
+        ...a,
+        subtasks: (a.subtasks || [])
+          .slice()
+          .sort((x, y) => (x.order_index ?? 0) - (y.order_index ?? 0)),
+      }));
       setActivitiesByList((s) => ({
         ...s,
-        [listId]: (data as unknown as Activity[]) || [],
+        [listId]: normalized,
       }));
     } catch (error) {
       console.error(error);
@@ -74,7 +81,7 @@ export const PersonalListsBoard: React.FC<Props> = ({
     lists.forEach((l) => loadActivities(l.id));
 
     // Single realtime channel scoped to the user's personal list activities
-    // Triggers on create/update/delete where list_id is not null and created_by is the current user
+    // Triggers on create/update/delete and we filter in the handler to avoid missing events
     const channel = supabase
       .channel(`personal_list_activities_user_${user?.id || "anon"}`)
       .on(
@@ -83,21 +90,35 @@ export const PersonalListsBoard: React.FC<Props> = ({
           event: "*",
           schema: "public",
           table: "activities",
-          filter: `and(list_id.is.not.null,created_by=eq.${
-            user?.id || "00000000-0000-0000-0000-000000000000"
-          })`,
         },
         (payload) => {
-          const newRow = payload.new as { list_id?: string } | null;
-          const oldRow = payload.old as { list_id?: string } | null;
+          const newRow = payload.new as {
+            list_id?: string;
+            created_by?: string;
+          } | null;
+          const oldRow = payload.old as {
+            list_id?: string;
+            created_by?: string;
+          } | null;
           const listId = newRow?.list_id ?? oldRow?.list_id;
-          if (listId) {
-            // Reload only the impacted list
-            loadActivities(listId);
-          } else {
-            // Fallback: reload all lists if we can't determine the list id
-            lists.forEach((l) => loadActivities(l.id));
-          }
+          const createdBy = newRow?.created_by ?? oldRow?.created_by;
+          if (!listId) return;
+          // Only react to rows belonging to current user when possible
+          if (createdBy && user?.id && createdBy !== user.id) return;
+          // Reload only the impacted list
+          loadActivities(listId);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "subtasks",
+        },
+        () => {
+          // Reload all lists when subtasks change
+          lists.forEach((l) => loadActivities(l.id));
         }
       )
       .subscribe();
@@ -118,12 +139,30 @@ export const PersonalListsBoard: React.FC<Props> = ({
         lists.forEach((l) => loadActivities(l.id));
       }
     };
+    const forceHandler = (e: Event) => {
+      const custom = e as CustomEvent<{ listId?: string }>;
+      const listId = custom.detail?.listId;
+      if (listId) {
+        // Reload imediato e com delay para garantir
+        loadActivities(listId);
+        setTimeout(() => loadActivities(listId), 100);
+      }
+    };
     window.addEventListener("personal-list-updated", handler as EventListener);
-    return () =>
+    window.addEventListener(
+      "personal-list-force-reload",
+      forceHandler as EventListener
+    );
+    return () => {
       window.removeEventListener(
         "personal-list-updated",
         handler as EventListener
       );
+      window.removeEventListener(
+        "personal-list-force-reload",
+        forceHandler as EventListener
+      );
+    };
   }, [lists]);
 
   const handleAddList = async () => {
@@ -151,7 +190,7 @@ export const PersonalListsBoard: React.FC<Props> = ({
       </div>
 
       {/* Grid responsiva: até 4 colunas lado a lado no desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start min-h-0">
         {lists.map((list) => {
           const all = activitiesByList[list.id] || [];
           const items = statusFilter
@@ -161,7 +200,7 @@ export const PersonalListsBoard: React.FC<Props> = ({
           return (
             <div
               key={list.id}
-              className="w-full bg-gray-100 dark:bg-[#1f1f1f] rounded-xl p-3 border border-gray-200 dark:border-gray-700 flex flex-col"
+              className="w-full bg-gray-100 dark:bg-[#1f1f1f] rounded-xl p-3 border border-gray-200 dark:border-gray-700 flex flex-col min-h-[120px]"
             >
               <div className="flex items-center justify-between mb-2">
                 <button
@@ -186,11 +225,12 @@ export const PersonalListsBoard: React.FC<Props> = ({
                 </button>
               </div>
 
-              <div className="flex-1 flex flex-col gap-2">
+              {/* Dynamic height list with scroll when needed */}
+              <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto pr-1 max-h-[65vh] lg:max-h-[70vh]">
                 {items.map((a) => (
                   <div
                     key={a.id}
-                    className="bg-white dark:bg-[#161616] rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all duration-150 hover:shadow-md"
+                    className="bg-white dark:bg-[#161616] rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all duration-150 hover:shadow-md overflow-hidden flex-shrink-0"
                     onClick={() => onEditCard(a)}
                   >
                     <ActivityCard activity={a} />
@@ -209,86 +249,73 @@ export const PersonalListsBoard: React.FC<Props> = ({
           );
         })}
 
-        {/* Botão para criar nova lista ocupa uma célula da grid */}
-        <button
-          onClick={handleAddList}
-          className="w-full bg-gray-200/70 dark:bg-gray-800/70 hover:bg-gray-200 dark:hover:bg-gray-700 border border-dashed border-gray-400 dark:border-gray-600 rounded-xl p-3 flex items-center gap-2 text-gray-700 dark:text-gray-300 justify-start"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar outra lista
-        </button>
+        {/* Botão para adicionar nova lista */}
+        <div className="w-full bg-gray-50 dark:bg-[#0f0f0f] rounded-xl p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center min-h-[120px]">
+          <button
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors flex items-center gap-2 text-sm font-medium"
+            onClick={handleAddList}
+          >
+            <Plus className="h-5 w-5" />
+            <span>Adicionar quadro</span>
+          </button>
+        </div>
       </div>
 
-      {/* Dialog para nova lista */}
+      {/* Dialog para criar nova lista */}
       <Dialog open={newListOpen} onOpenChange={setNewListOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo quadro privado</DialogTitle>
+            <DialogTitle>Criar novo quadro</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Input
-              placeholder="Nome do quadro"
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") confirmCreateList();
-              }}
-              autoFocus
-            />
-          </div>
+          <Input
+            placeholder="Nome do quadro"
+            value={newListName}
+            onChange={(e) => setNewListName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmCreateList();
+            }}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewListOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={confirmCreateList} disabled={!newListName.trim()}>
-              Criar
-            </Button>
+            <Button onClick={confirmCreateList}>Criar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para renomear quadro */}
+      {/* Dialog para renomear lista */}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Renomear quadro</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Input
-              placeholder="Novo nome do quadro"
-              value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === "Enter" && selectedListId && renameName.trim()) {
-                  await renameList(selectedListId, renameName.trim());
-                  toast({ title: "Quadro renomeado" });
+          <Input
+            placeholder="Nome do quadro"
+            value={renameName}
+            onChange={(e) => setRenameName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const name = renameName.trim();
+                if (name && selectedListId) {
+                  renameList(selectedListId, name);
                   setRenameOpen(false);
-                  setSelectedListId(null);
                 }
-              }}
-              autoFocus
-            />
-          </div>
+              }
+            }}
+          />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRenameOpen(false);
-                setSelectedListId(null);
-              }}
-            >
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>
               Cancelar
             </Button>
             <Button
-              onClick={async () => {
-                if (selectedListId && renameName.trim()) {
-                  await renameList(selectedListId, renameName.trim());
-                  toast({ title: "Quadro renomeado" });
+              onClick={() => {
+                const name = renameName.trim();
+                if (name && selectedListId) {
+                  renameList(selectedListId, name);
                   setRenameOpen(false);
-                  setSelectedListId(null);
                 }
               }}
-              disabled={!renameName.trim()}
             >
               Salvar
             </Button>
@@ -296,36 +323,26 @@ export const PersonalListsBoard: React.FC<Props> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de confirmação para exclusão */}
+      {/* Dialog para confirmar exclusão */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir quadro privado</DialogTitle>
+            <DialogTitle>Excluir quadro</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1 text-sm text-muted-foreground">
-            <p>
-              Tem certeza que deseja excluir este quadro? As atividades serão
-              mantidas privadas, porém sem associação a uma lista.
-            </p>
-          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Tem certeza que deseja excluir este quadro? Esta ação não pode ser
+            desfeita.
+          </p>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteOpen(false);
-                setSelectedListId(null);
-              }}
-            >
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
               Cancelar
             </Button>
             <Button
               variant="destructive"
-              onClick={async () => {
+              onClick={() => {
                 if (selectedListId) {
-                  await deleteList(selectedListId);
-                  toast({ title: "Quadro excluído" });
+                  deleteList(selectedListId);
                   setDeleteOpen(false);
-                  setSelectedListId(null);
                 }
               }}
             >

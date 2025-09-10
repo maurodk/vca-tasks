@@ -1,6 +1,13 @@
 import { Activity } from "@/hooks/useActivities";
 import { format } from "date-fns";
-import { Calendar, Clock, User, CheckSquare, Tag, AlertTriangle } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  User,
+  CheckSquare,
+  Tag,
+  AlertTriangle,
+} from "lucide-react";
 
 interface ActivityCardProps {
   activity: Activity;
@@ -81,22 +88,27 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
     activity.subtasks?.filter((s) => s.is_completed).length || 0;
 
   return (
-    <div className={`p-3 cursor-pointer group transition-all duration-200 ${
-      activity.priority === "high" 
-        ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 shadow-md hover:shadow-lg" 
-        : ""
-    }`} onClick={onClick}>
+    <div
+      className={`p-3 cursor-pointer group transition-all duration-200 h-full ${
+        activity.priority === "high"
+          ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 shadow-md hover:shadow-lg"
+          : ""
+      } flex flex-col`}
+      onClick={onClick}
+    >
       {/* Título + marcador de privacidade */}
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-1">
           {activity.priority === "high" && (
             <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
           )}
-          <h4 className={`text-sm font-medium leading-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
-            activity.priority === "high" 
-              ? "text-red-800 dark:text-red-200 font-semibold" 
-              : "text-gray-800 dark:text-gray-200"
-          }`}>
+          <h4
+            className={`text-sm font-medium leading-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
+              activity.priority === "high"
+                ? "text-red-800 dark:text-red-200 font-semibold"
+                : "text-gray-800 dark:text-gray-200"
+            }`}
+          >
             {activity.title}
           </h4>
         </div>
@@ -131,25 +143,26 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
       )}
 
       {/* Data de vencimento */}
-      {activity.due_date && (() => {
-        try {
-          const date = new Date(activity.due_date + 'T00:00:00');
-          if (isNaN(date.getTime())) return null;
-          return (
-            <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
-              <Calendar className="h-3 w-3 text-gray-700 dark:text-gray-400" />
-              <span>{format(date, "dd/MM")}</span>
-            </div>
-          );
-        } catch (error) {
-          console.warn('Invalid date:', activity.due_date, error);
-          return null;
-        }
-      })()}
+      {activity.due_date &&
+        (() => {
+          try {
+            const date = new Date(activity.due_date + "T00:00:00");
+            if (isNaN(date.getTime())) return null;
+            return (
+              <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
+                <Calendar className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+                <span>{format(date, "dd/MM")}</span>
+              </div>
+            );
+          } catch (error) {
+            console.warn("Invalid date:", activity.due_date, error);
+            return null;
+          }
+        })()}
 
       {/* Checklist Groups Preview */}
       {totalSubtasks > 0 && (
-        <div className="space-y-2 mb-2">
+        <div className="space-y-2 mb-2 overflow-hidden">
           {Object.entries(checklistGroups).map(([groupName, subtasks]) => {
             const groupCompleted = subtasks.filter(
               (s) => s.is_completed
@@ -232,7 +245,7 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
 
       {/* Usuário responsável */}
       {activity.profiles && (
-        <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+        <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
           <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
           <span>{activity.profiles.full_name || "Usuário"}</span>
         </div>

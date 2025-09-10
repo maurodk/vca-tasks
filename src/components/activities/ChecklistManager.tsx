@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Check, X } from "lucide-react";
+import { Plus, Trash2, Check, X, Pencil } from "lucide-react";
 import { Subtask } from "@/hooks/useActivities";
 
 interface ChecklistManagerProps {
@@ -20,6 +20,8 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [groupDraftName, setGroupDraftName] = useState<string>("");
 
   // Agrupar subtasks por grupo
   const groupedSubtasks = subtasks.reduce(
@@ -37,7 +39,7 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
   const handleAddGroup = () => {
     if (!newGroupName.trim()) return;
     const group = newGroupName.trim();
-    // Cria o primeiro item vazio, obrigando o usuário a nomeá-lo em seguida
+    // Cria um item vazio para garantir que o grupo apareça
     const initialSubtask: Subtask = {
       id: `temp-${Date.now()}`,
       activity_id: "",
@@ -106,8 +108,37 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
     onSubtasksChange(updatedSubtasks);
   };
 
-  console.log("Current subtasks:", subtasks);
-  console.log("Grouped subtasks:", groupedSubtasks);
+  const startRenameGroup = (groupName: string) => {
+    setEditingGroup(groupName);
+    setGroupDraftName(groupName);
+  };
+
+  const confirmRenameGroup = () => {
+    const oldName = editingGroup;
+    const newName = groupDraftName.trim();
+    if (!oldName || !newName) {
+      // if blank, just cancel
+      setEditingGroup(null);
+      setGroupDraftName("");
+      return;
+    }
+    // Update all tasks in this group
+    const updated = subtasks.map((t) => {
+      const currentGroup = t.checklist_group || "Checklist";
+      if (currentGroup === oldName) {
+        return { ...t, checklist_group: newName };
+      }
+      return t;
+    });
+    onSubtasksChange(updated);
+    setEditingGroup(null);
+    setGroupDraftName("");
+  };
+
+  const cancelRenameGroup = () => {
+    setEditingGroup(null);
+    setGroupDraftName("");
+  };
 
   return (
     <div className="space-y-4">
@@ -159,8 +190,11 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       {/* Grupos de checklist */}
       <div className="space-y-3">
         {Object.entries(groupedSubtasks).map(([groupName, tasks]) => {
-          const completedTasks = tasks.filter((t) => t.is_completed).length;
-          const totalTasks = tasks.length;
+          const validTasks = tasks.filter((t) => t.title.trim());
+          const completedTasks = validTasks.filter(
+            (t) => t.is_completed
+          ).length;
+          const totalTasks = validTasks.length;
           const progress =
             totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
@@ -171,13 +205,54 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                      {groupName}
-                    </CardTitle>
-                    <Badge variant="secondary" className="text-xs">
-                      {completedTasks}/{totalTasks}
-                    </Badge>
+                  <div className="flex items-center gap-2 flex-1">
+                    {editingGroup === groupName ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <Input
+                          value={groupDraftName}
+                          onChange={(e) => setGroupDraftName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") confirmRenameGroup();
+                            if (e.key === "Escape") cancelRenameGroup();
+                          }}
+                          className="h-7 text-sm"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={confirmRenameGroup}
+                        >
+                          <Check className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2"
+                          onClick={cancelRenameGroup}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <CardTitle className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                          {groupName}
+                        </CardTitle>
+                        <Badge variant="secondary" className="text-xs">
+                          {completedTasks}/{totalTasks}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startRenameGroup(groupName)}
+                          className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700"
+                          title="Renomear grupo"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
