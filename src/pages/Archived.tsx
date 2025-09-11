@@ -186,7 +186,7 @@ export function Archived() {
                   Excluir selecionadas ({selectedIds.size})
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                 <AlertDialogHeader>
                   <AlertDialogTitle>
                     Excluir atividades selecionadas
@@ -304,7 +304,7 @@ export function Archived() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent>
+                              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
                                     Excluir atividade

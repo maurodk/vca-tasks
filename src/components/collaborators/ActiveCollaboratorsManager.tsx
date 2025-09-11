@@ -906,13 +906,18 @@ const ActiveCollaboratorsManager: React.FC = () => {
                                 >
                                   <div className="p-2">
                                     {/* Board/List tag above the title */}
-                                    <div className="mb-1 text-xs text-muted-foreground">
+                                    <div className="mb-1 text-xs text-muted-foreground flex gap-1">
                                       <span className="px-2 py-0.5 rounded-full bg-muted">
                                         {activity.subsectors?.name ||
                                           (activity.list_id
                                             ? "Quadro Privado"
                                             : "")}
                                       </span>
+                                      {activity.status === "archived" && (
+                                        <span className="px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium">
+                                          Arquivada
+                                        </span>
+                                      )}
                                     </div>
                                     {/* Lightweight adapt to Activity type for card rendering */}
                                     <ActivityCard
