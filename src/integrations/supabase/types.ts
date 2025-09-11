@@ -80,31 +80,146 @@ export type Database = {
           },
         ]
       }
-      activity_assignments: {
+      activity_assignees: {
         Row: {
           activity_id: string
-          assigned_at: string | null
-          assigned_by: string
-          assigned_to: string
-          id: string
+          user_id: string
+          created_at: string | null
         }
         Insert: {
           activity_id: string
-          assigned_at?: string | null
-          assigned_by: string
-          assigned_to: string
-          id?: string
+          user_id: string
+          created_at?: string | null
         }
         Update: {
           activity_id?: string
-          assigned_at?: string | null
-          assigned_by?: string
-          assigned_to?: string
-          id?: string
+          user_id?: string
+          created_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "activity_assignments_activity_id_fkey"
+            foreignKeyName: "activity_assignees_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_history: {
+        Row: {
+          id: string
+          activity_id: string
+          action: string
+          performed_by: string
+          details: Json | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          activity_id: string
+          action: string
+          performed_by: string
+          details?: Json | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          activity_id?: string
+          action?: string
+          performed_by?: string
+          details?: Json | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_history_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personal_lists: {
+        Row: {
+          id: string
+          name: string
+          user_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          user_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          user_id?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      profile_subsectors: {
+        Row: {
+          profile_id: string
+          subsector_id: string
+          created_at: string | null
+        }
+        Insert: {
+          profile_id: string
+          subsector_id: string
+          created_at?: string | null
+        }
+        Update: {
+          profile_id?: string
+          subsector_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_subsectors_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_subsectors_subsector_id_fkey"
+            columns: ["subsector_id"]
+            isOneToOne: false
+            referencedRelation: "subsectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subtasks: {
+        Row: {
+          id: string
+          activity_id: string
+          title: string
+          is_completed: boolean
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          activity_id: string
+          title: string
+          is_completed?: boolean
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          activity_id?: string
+          title?: string
+          is_completed?: boolean
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtasks_activity_id_fkey"
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"

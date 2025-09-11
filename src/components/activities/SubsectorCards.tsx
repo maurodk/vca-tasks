@@ -41,26 +41,8 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
           if (error) throw error;
           setSubsectors(data || []);
         } else if (profile.role === "collaborator") {
-          // Colaboradores veem seus múltiplos subsetores
-          const { data: profileSubsectors, error: psError } = await supabase
-            .from("profile_subsectors")
-            .select(`
-              subsector_id,
-              subsectors (
-                id,
-                name
-              )
-            `)
-            .eq("profile_id", profile.id);
-
-          if (psError) throw psError;
-
-          const multipleSubsectors = profileSubsectors
-            ?.map(ps => ps.subsectors)
-            .filter(Boolean) || [];
-
-          // Se não tem múltiplos subsetores, usar o subsetor principal
-          if (multipleSubsectors.length === 0 && profile.subsector_id) {
+          // Colaboradores veem apenas seu subsetor principal
+          if (profile.subsector_id) {
             const { data: primarySubsector, error: primaryError } = await supabase
               .from("subsectors")
               .select("id, name")
@@ -70,8 +52,6 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
             if (!primaryError && primarySubsector) {
               setSubsectors([primarySubsector]);
             }
-          } else {
-            setSubsectors(multipleSubsectors as Subsector[]);
           }
         }
       } catch (error) {

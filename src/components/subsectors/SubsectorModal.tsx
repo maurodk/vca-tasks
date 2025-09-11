@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useEscClose } from "@/hooks/useEscClose";
+import { useGlobalEscClose } from "@/hooks/useGlobalEscClose";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -53,7 +53,7 @@ export function SubsectorModal({
   const { profile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  useEscClose(open, () => onOpenChange(false));
+  useGlobalEscClose(open, () => onOpenChange(false));
 
   const form = useForm<SubsectorFormData>({
     resolver: zodResolver(subsectorSchema),

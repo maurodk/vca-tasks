@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { ModalProvider } from "@/contexts/ModalContext";
 import Index from "./pages/Index";
 import IndexDebug from "./pages/IndexDebug";
 import IndexSimple from "./pages/IndexSimple";
@@ -21,7 +22,8 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="system" storageKey="week-flow-theme">
-      <TooltipProvider>
+      <ModalProvider>
+        <TooltipProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -55,7 +57,8 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
-      </TooltipProvider>
+        </TooltipProvider>
+      </ModalProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

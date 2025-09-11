@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SmoothTransition } from "@/components/ui/smooth-transition";
 import { SkeletonCard, SkeletonContent } from "@/components/ui/skeleton-card";
-import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
+import { ActivityViewModal } from "@/components/activities/ActivityViewModal";
 import {
   Archive,
   FileText,
@@ -38,7 +38,7 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Activity } from "@/hooks/useActivities";
 import { ArchivedActivity } from "@/hooks/useArchivedActivities";
-import { useActivityOperations } from "@/hooks/useActivityOperations";
+
 
 export function Archived() {
   const { profile } = useAuth();
@@ -49,7 +49,7 @@ export function Archived() {
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
-  const { updateActivity } = useActivityOperations();
+
 
   // Usando o hook específico para atividades arquivadas
   const { activities, loading, deleteActivity, unarchiveActivity } =
@@ -403,31 +403,10 @@ export function Archived() {
       </SmoothTransition>
 
       {activityModalOpen && selectedActivity && (
-        <ActivityEditModal
+        <ActivityViewModal
           activity={selectedActivity}
           isOpen={activityModalOpen}
           onClose={() => {
-            setActivityModalOpen(false);
-            setSelectedActivity(null);
-          }}
-          onSave={async (partial) => {
-            // Permitir editar campos; se status sair de 'archived', ele some da lista
-            await updateActivity({
-              id: selectedActivity.id,
-              title: partial.title,
-              description: partial.description,
-              due_date: partial.due_date as string | undefined,
-              priority: partial.priority as Activity["priority"] | undefined,
-              status: partial.status as Activity["status"] | undefined,
-              user_id: partial.user_id,
-              is_private: (partial as unknown as { is_private?: boolean })
-                .is_private,
-            });
-            setActivityModalOpen(false);
-            setSelectedActivity(null);
-          }}
-          onDelete={async (id) => {
-            await handleDeleteActivity(id, selectedActivity.title);
             setActivityModalOpen(false);
             setSelectedActivity(null);
           }}

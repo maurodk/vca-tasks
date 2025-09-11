@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useEscClose } from "@/hooks/useEscClose";
+import { useGlobalEscClose } from "@/hooks/useGlobalEscClose";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +40,7 @@ export function ActivityHistoryModal({
   title = "Histórico de Atividades",
 }: ActivityHistoryModalProps) {
   const [refreshing, setRefreshing] = useState(false);
-  useEscClose(open, () => onOpenChange(false));
+  useGlobalEscClose(open, () => onOpenChange(false));
   const [subsectorFilter, setSubsectorFilter] = useState<string | "all">("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");

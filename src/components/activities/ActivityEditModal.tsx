@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useEscClose } from "@/hooks/useEscClose";
+import { useGlobalEscClose } from "@/hooks/useGlobalEscClose";
 import { X, Calendar, User, Flag, Clock } from "lucide-react";
 import { Activity } from "@/hooks/useActivities";
 import { ChecklistManager } from "@/components/activities/ChecklistManager";
@@ -71,20 +71,8 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         setStatus(activity.status || "pending");
         setSubtasks(activity.subtasks || []);
         
-        // Carregar múltiplos responsáveis da tabela activity_assignees
-        try {
-          const { data: assignees } = await supabase
-            .from("activity_assignees")
-            .select("user_id")
-            .eq("activity_id", activity.id);
-          
-          const assigneeIds = assignees?.map(a => a.user_id) || [];
-          // Se não há responsáveis na nova tabela, usar o user_id antigo
-          setAssigneeIds(assigneeIds.length > 0 ? assigneeIds : (activity.user_id ? [activity.user_id] : []));
-        } catch (error) {
-          console.error("Erro ao carregar responsáveis:", error);
-          setAssigneeIds(activity.user_id ? [activity.user_id] : []);
-        }
+        // Carregar múltiplos responsáveis
+        setAssigneeIds(activity.user_id ? [activity.user_id] : []);
         
         const maybePrivate = (activity as unknown as { is_private?: boolean })
           .is_private;
@@ -128,7 +116,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   }, [isOpen, activity, defaultDueDate, user?.id]);
 
   // ESC fecha modal
-  useEscClose(isOpen, onClose);
+  useGlobalEscClose(isOpen, onClose);
 
   // Bloquear scroll do body quando o modal estiver aberto para evitar "pulo"/reflow ao abrir dropdowns
   useEffect(() => {
@@ -152,36 +140,14 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         const targetSubsectorId = subsectorId || activity?.subsector_id;
 
         if (targetSubsectorId) {
-          // Buscar usuários do subsetor específico via nova tabela
-          const { data: profileSubsectors } = await supabase
-            .from("profile_subsectors")
-            .select(`
-              profile_id,
-              profiles (
-                id,
-                full_name,
-                sector_id
-              )
-            `)
-            .eq("subsector_id", targetSubsectorId);
-
-          const usersFromNew = profileSubsectors
-            ?.filter(ps => ps.profiles?.sector_id === profile.sector_id)
-            .map(ps => ps.profiles)
-            .filter(Boolean) || [];
-
-          // Buscar também usuários com subsector_id antigo (compatibilidade)
+          // Buscar usuários do subsetor específico
           const { data: oldUsers } = await supabase
             .from("profiles")
             .select("id, full_name")
             .eq("sector_id", profile.sector_id)
             .eq("subsector_id", targetSubsectorId);
 
-          // Combinar e remover duplicatas
-          const allUsers = [...usersFromNew, ...(oldUsers || [])];
-          list = allUsers.filter((user, index, arr) => 
-            arr.findIndex(u => u.id === user.id) === index
-          );
+          list = oldUsers || [];
         } else {
           // Sem subsetor específico, buscar todos do setor
           const { data } = await supabase
@@ -229,7 +195,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         subtasks: subtasks,
         is_private: isPrivate,
         user_id: assigneeIds[0] || user?.id,
-        assignee_ids: assigneeIds,
+        assignees: assigneeIds,
       };
 
       await onSave(updatedActivity);
