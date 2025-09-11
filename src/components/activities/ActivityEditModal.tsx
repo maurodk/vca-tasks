@@ -116,7 +116,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   }, [isOpen, activity, defaultDueDate, user?.id]);
 
   // ESC fecha modal
-  useGlobalEscClose(isOpen, onClose);
+  useGlobalEscClose(isOpen, onClose, 160);
 
   // Bloquear scroll do body quando o modal estiver aberto para evitar "pulo"/reflow ao abrir dropdowns
   useEffect(() => {
@@ -207,7 +207,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[150] grid place-items-center">
+    <div className="fixed inset-0 z-[160] grid place-items-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -215,7 +215,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
       />
 
       {/* Modal */}
-      <div className="relative w-[95vw] max-w-2xl max-h-[90vh] bg-background border rounded-2xl shadow-2xl overflow-hidden z-[160]">
+      <div className="relative w-[95vw] max-w-4xl max-h-[90vh] bg-background border rounded-2xl shadow-2xl overflow-hidden z-[160]">
         {/* Header */}
         <div className="sticky top-0 bg-background/95 backdrop-blur border-b px-6 py-4 flex items-center justify-between z-[170]">
           <h2 className="text-xl font-semibold flex items-center gap-2">

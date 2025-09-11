@@ -1,17 +1,22 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+interface ModalInfo {
+  onClose: () => void;
+  zIndex: number;
+}
+
 interface ModalContextType {
-  registerModal: (id: string, onClose: () => void) => void;
+  registerModal: (id: string, onClose: () => void, zIndex?: number) => void;
   unregisterModal: (id: string) => void;
 }
 
 const ModalContext = createContext<ModalContextType | undefined>(undefined);
 
 export function ModalProvider({ children }: { children: React.ReactNode }) {
-  const [modals, setModals] = useState<Map<string, () => void>>(new Map());
+  const [modals, setModals] = useState<Map<string, ModalInfo>>(new Map());
 
-  const registerModal = (id: string, onClose: () => void) => {
-    setModals(prev => new Map(prev).set(id, onClose));
+  const registerModal = (id: string, onClose: () => void, zIndex: number = 150) => {
+    setModals(prev => new Map(prev).set(id, { onClose, zIndex }));
   };
 
   const unregisterModal = (id: string) => {
@@ -27,9 +32,10 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       if (e.key === 'Escape' && modals.size > 0) {
         e.preventDefault();
         e.stopPropagation();
-        // Fechar o último modal registrado (mais recente)
-        const lastModal = Array.from(modals.values()).pop();
-        lastModal?.();
+        // Fechar o modal com maior z-index (mais à frente)
+        const modalWithHighestZIndex = Array.from(modals.values())
+          .sort((a, b) => b.zIndex - a.zIndex)[0];
+        modalWithHighestZIndex?.onClose();
       }
     };
 

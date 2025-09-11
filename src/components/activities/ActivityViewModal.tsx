@@ -35,7 +35,7 @@ export const ActivityViewModal: React.FC<ActivityViewModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  useGlobalEscClose(isOpen, onClose);
+  useGlobalEscClose(isOpen, onClose, 160);
 
   useEffect(() => {
     if (isOpen) {
@@ -116,7 +116,7 @@ export const ActivityViewModal: React.FC<ActivityViewModalProps> = ({
   ) || {};
 
   return createPortal(
-    <div className="fixed inset-0 z-[150] grid place-items-center">
+    <div className="fixed inset-0 z-[160] grid place-items-center">
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}

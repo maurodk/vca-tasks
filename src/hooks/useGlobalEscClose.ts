@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useModalManager } from '@/contexts/ModalContext';
 
-export function useGlobalEscClose(isOpen: boolean, onClose: () => void) {
+export function useGlobalEscClose(isOpen: boolean, onClose: () => void, zIndex: number = 150) {
   const { registerModal, unregisterModal } = useModalManager();
   const modalIdRef = useRef<string>();
 
@@ -9,7 +9,7 @@ export function useGlobalEscClose(isOpen: boolean, onClose: () => void) {
     if (isOpen) {
       const modalId = `modal-${Date.now()}-${Math.random()}`;
       modalIdRef.current = modalId;
-      registerModal(modalId, onClose);
+      registerModal(modalId, onClose, zIndex);
       
       return () => {
         unregisterModal(modalId);
@@ -18,7 +18,7 @@ export function useGlobalEscClose(isOpen: boolean, onClose: () => void) {
       unregisterModal(modalIdRef.current);
       modalIdRef.current = undefined;
     }
-  }, [isOpen, onClose, registerModal, unregisterModal]);
+  }, [isOpen, onClose, zIndex, registerModal, unregisterModal]);
 
   useEffect(() => {
     return () => {

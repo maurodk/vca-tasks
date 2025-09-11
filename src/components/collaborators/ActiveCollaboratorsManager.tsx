@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SmoothTransition } from "@/components/ui/smooth-transition";
 import { ActivityCard } from "@/components/activities/ActivityCard";
-import { ActivityViewModal } from "@/components/activities/ActivityViewModal";
+import { ActivityEditModal } from "@/components/activities/ActivityEditModal";
 import { Activity as FullActivity } from "@/hooks/useActivities";
 import { SkeletonCard, SkeletonContent } from "@/components/ui/skeleton-card";
 import { supabase } from "@/lib/supabase";
@@ -110,11 +110,11 @@ const ActiveCollaboratorsManager: React.FC = () => {
   const [allSubsectors, setAllSubsectors] = useState<Array<{id: string, name: string, sector_id: string}>>([]);
   const [saving, setSaving] = useState(false);
   const { subsectors: profileSubsectors, updateSubsectors } = useMultipleSubsectors(selectedCollaborator?.id);
-  const [selectedActivity, setSelectedActivity] = useState<LocalActivity | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<FullActivity | null>(null);
   const [activityModalOpen, setActivityModalOpen] = useState(false);
 
   // ESC fecha modal do colaborador
-  useGlobalEscClose(modalOpen, () => setModalOpen(false));
+  useGlobalEscClose(modalOpen, () => setModalOpen(false), 50);
 
   const fetchCollaborators = useCallback(async () => {
     if (!profile?.sector_id) return;
@@ -920,7 +920,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
                                         activity as unknown as FullActivity
                                       }
                                       onClick={() => {
-                                        setSelectedActivity(activity);
+                                        setSelectedActivity(activity as unknown as FullActivity);
                                         setActivityModalOpen(true);
                                       }}
                                     />
@@ -995,11 +995,19 @@ const ActiveCollaboratorsManager: React.FC = () => {
           </div>
         )}
 
-        {/* Modal de visualização de atividade */}
-        <ActivityViewModal
+        {/* Modal de edição de atividade */}
+        <ActivityEditModal
           activity={selectedActivity}
           isOpen={activityModalOpen}
           onClose={() => {
+            setActivityModalOpen(false);
+            setSelectedActivity(null);
+          }}
+          onSave={async (updatedActivity) => {
+            // Recarregar atividades após salvar
+            if (selectedCollaborator) {
+              await fetchCollaboratorActivities(selectedCollaborator.id);
+            }
             setActivityModalOpen(false);
             setSelectedActivity(null);
           }}
