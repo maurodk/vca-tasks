@@ -31,7 +31,7 @@ import {
   AlertCircle,
   Trash2,
   RotateCcw,
-  Eye,
+
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -113,7 +113,7 @@ export function Archived() {
     // Converter ArchivedActivity para Activity
     const fullActivity: Activity = {
       ...activity,
-      subtasks: [],
+      subtasks: activity.subtasks || [],
     };
     setSelectedActivity(fullActivity);
     setActivityModalOpen(true);
@@ -254,7 +254,8 @@ export function Archived() {
                   {dayActivities.map((activity) => (
                     <Card
                       key={activity.id}
-                      className="relative hover-transition animate-fade-in dark:bg-[#161616] dark:border-gray-800"
+                      className="relative hover-transition animate-fade-in dark:bg-[#161616] dark:border-gray-800 cursor-pointer hover:shadow-md"
+                      onClick={() => handleViewActivity(activity)}
                     >
                       <CardHeader>
                         <div className="flex justify-between items-start">
@@ -273,26 +274,21 @@ export function Archived() {
                                 type="checkbox"
                                 className="h-4 w-4 mt-2"
                                 checked={selectedIds.has(activity.id)}
-                                onChange={() => toggleSelect(activity.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  toggleSelect(activity.id);
+                                }}
                                 title="Selecionar atividade"
                               />
                             )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => handleViewActivity(activity)}
-                              title="Visualizar atividade"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
                               className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                              onClick={() =>
-                                handleUnarchiveActivity(activity.id, "pending")
-                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnarchiveActivity(activity.id, "pending");
+                              }}
                               title="Recuperar como Pendente"
                             >
                               <RotateCcw className="h-4 w-4" />
@@ -303,6 +299,7 @@ export function Archived() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => e.stopPropagation()}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -345,7 +342,7 @@ export function Archived() {
                           {activity.description}
                         </p>
                         <div className="flex justify-between items-center">
-                          <div className="flex gap-2">
+                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                             <Badge variant="outline">{activity.status}</Badge>
                             {activity.priority && (
                               <Badge

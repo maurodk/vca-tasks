@@ -15,9 +15,16 @@ type SubsectorData = Pick<
   "name"
 >;
 
+type SubtaskRow = Database["public"]["Tables"]["subtasks"]["Row"];
+
+export type Subtask = SubtaskRow & {
+  checklist_group?: string;
+};
+
 export type ArchivedActivity = ActivityRow & {
   profiles?: ProfileData | null;
   subsectors?: SubsectorData | null;
+  subtasks?: Subtask[];
 };
 
 /**
@@ -50,6 +57,17 @@ export function useArchivedActivities() {
           ),
           subsectors (
             name
+          ),
+          subtasks (
+            id,
+            activity_id,
+            title,
+            description,
+            is_completed,
+            checklist_group,
+            order_index,
+            created_at,
+            updated_at
           )
         `
         )
