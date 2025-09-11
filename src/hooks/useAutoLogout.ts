@@ -4,44 +4,78 @@ import { toast } from '@/hooks/use-toast';
 
 const INACTIVITY_TIME = 1 * 60 * 60 * 1000; // 1 hora em ms
 const WARNING_TIME = 5 * 60 * 1000; // 5 minutos antes do logout
+const LAST_ACTIVITY_KEY = 'vca_last_activity';
 
 export const useAutoLogout = () => {
   const { signOut, user } = useAuthStore();
   const timeoutRef = useRef<NodeJS.Timeout>();
   const warningTimeoutRef = useRef<NodeJS.Timeout>();
-  const lastActivityRef = useRef<number>(Date.now());
+  const checkIntervalRef = useRef<NodeJS.Timeout>();
 
-  const resetTimer = useCallback(() => {
+  const updateLastActivity = useCallback(() => {
     if (!user) return;
+    const now = Date.now();
+    localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
+  }, [user]);
 
-    lastActivityRef.current = Date.now();
+  const getLastActivity = useCallback(() => {
+    const stored = localStorage.getItem(LAST_ACTIVITY_KEY);
+    return stored ? parseInt(stored) : Date.now();
+  }, []);
+
+  const checkInactivity = useCallback(async () => {
+    if (!user) return;
     
-    // Limpa timers existentes
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
-
-    // Timer de aviso (5 min antes do logout)
-    warningTimeoutRef.current = setTimeout(() => {
-      toast({
-        title: "Sessão expirando",
-        description: "Sua sessão expirará em 5 minutos por inatividade. Mova o mouse para continuar.",
-        variant: "destructive",
-      });
-    }, INACTIVITY_TIME - WARNING_TIME);
-
-    // Timer de logout
-    timeoutRef.current = setTimeout(async () => {
+    const lastActivity = getLastActivity();
+    const timeSinceActivity = Date.now() - lastActivity;
+    
+    if (timeSinceActivity >= INACTIVITY_TIME) {
       toast({
         title: "Sessão expirada",
         description: "Você foi desconectado por inatividade.",
         variant: "destructive",
       });
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
       await signOut();
-    }, INACTIVITY_TIME);
-  }, [user, signOut]);
+      return;
+    }
+    
+    const timeUntilWarning = INACTIVITY_TIME - WARNING_TIME - timeSinceActivity;
+    const timeUntilLogout = INACTIVITY_TIME - timeSinceActivity;
+    
+    // Limpa timers existentes
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
+    
+    // Timer de aviso
+    if (timeUntilWarning > 0) {
+      warningTimeoutRef.current = setTimeout(() => {
+        toast({
+          title: "Sessão expirando",
+          description: "Sua sessão expirará em 5 minutos por inatividade. Mova o mouse para continuar.",
+          variant: "destructive",
+        });
+      }, timeUntilWarning);
+    }
+    
+    // Timer de logout
+    if (timeUntilLogout > 0) {
+      timeoutRef.current = setTimeout(async () => {
+        await checkInactivity();
+      }, timeUntilLogout);
+    }
+  }, [user, signOut, getLastActivity]);
+
+  const resetTimer = useCallback(() => {
+    updateLastActivity();
+    checkInactivity();
+  }, [updateLastActivity, checkInactivity]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      return;
+    }
 
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     
@@ -52,8 +86,11 @@ export const useAutoLogout = () => {
       document.addEventListener(event, handleActivity, true);
     });
 
-    // Inicia o timer
-    resetTimer();
+    // Verifica inatividade ao carregar a página
+    checkInactivity();
+    
+    // Verifica periodicamente (a cada 30 segundos)
+    checkIntervalRef.current = setInterval(checkInactivity, 30000);
 
     return () => {
       // Remove listeners
@@ -64,6 +101,7 @@ export const useAutoLogout = () => {
       // Limpa timers
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
+      if (checkIntervalRef.current) clearTimeout(checkIntervalRef.current);
     };
-  }, [user, resetTimer]);
+  }, [user, resetTimer, checkInactivity]);
 };
