@@ -2,7 +2,7 @@ import { useRef } from "react";
 
 interface DebugRenderProps {
   name: string;
-  data?: any;
+  data?: unknown;
 }
 
 export const DebugRender = ({ name, data }: DebugRenderProps) => {

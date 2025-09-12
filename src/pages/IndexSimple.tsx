@@ -32,7 +32,11 @@ import { Activity } from "@/hooks/useActivities";
 const IndexSimple = () => {
   const { profile } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const { activities: allActivities, loading, refetch } = useIndexActivitiesStable();
+  const {
+    activities: allActivities,
+    loading,
+    refetch,
+  } = useIndexActivitiesStable();
 
   // Listen for drag and drop updates
   useEffect(() => {
@@ -40,20 +44,30 @@ const IndexSimple = () => {
       refetch();
     };
 
-    window.addEventListener('activities-updated', handleActivitiesUpdate);
+    window.addEventListener("activities-updated", handleActivitiesUpdate);
     return () => {
-      window.removeEventListener('activities-updated', handleActivitiesUpdate);
+      window.removeEventListener("activities-updated", handleActivitiesUpdate);
     };
   }, [refetch]);
 
   // Filtrar atividades por mês atual
   const activities = useMemo(() => {
     if (!allActivities.length) return [];
-    
-    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
-    
-    return allActivities.filter(activity => {
+    const monthStart = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      1
+    );
+    const monthEnd = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + 1,
+      0,
+      23,
+      59,
+      59
+    );
+
+    return allActivities.filter((activity) => {
       const createdDate = new Date(activity.created_at);
       return createdDate >= monthStart && createdDate <= monthEnd;
     });
@@ -136,7 +150,7 @@ const IndexSimple = () => {
 
   // Navegação entre meses
   const navigateMonth = useCallback((direction: "prev" | "next") => {
-    setCurrentMonth(prev => {
+    setCurrentMonth((prev) => {
       const newDate = new Date(prev);
       if (direction === "prev") {
         newDate.setMonth(prev.getMonth() - 1);
@@ -149,11 +163,23 @@ const IndexSimple = () => {
 
   // Formatação do mês
   const monthNames = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
   ];
 
-  const currentMonthName = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+  const currentMonthName = `${
+    monthNames[currentMonth.getMonth()]
+  } ${currentMonth.getFullYear()}`;
 
   if (!profile) {
     return (
@@ -189,8 +215,12 @@ const IndexSimple = () => {
   const handleSaveActivity = async (activityData: Partial<Activity>) => {
     if (isCreating && (newActivitySubsector || creatingListId)) {
       // Usar o primeiro dia do mês selecionado como data de criação
-      const createdAt = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).toISOString();
-      
+      const createdAt = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth(),
+        1
+      ).toISOString();
+
       const createData = {
         title: activityData.title || "",
         description: activityData.description,
@@ -205,7 +235,24 @@ const IndexSimple = () => {
         created_at: createdAt,
       };
 
-      const assigneeIds = (activityData as any).assignees || [];
+      const rawAssignees = (activityData as unknown as { assignees?: unknown })
+        .assignees;
+      let assigneeIds: string[] = [];
+      if (Array.isArray(rawAssignees)) {
+        assigneeIds = rawAssignees
+          .map((a) => {
+            if (typeof a === "string") return a;
+            if (a && typeof a === "object") {
+              return (
+                (a as { user_id?: string; id?: string }).user_id ??
+                (a as { user_id?: string; id?: string }).id ??
+                null
+              );
+            }
+            return null;
+          })
+          .filter(Boolean) as string[];
+      }
 
       const success = await createActivity(createData);
       if (success) {
@@ -213,7 +260,7 @@ const IndexSimple = () => {
         if (assigneeIds.length > 0) {
           await saveMultipleAssignees(success.id, assigneeIds);
         }
-        
+
         if (creatingListId) {
           await updateActivity({ id: success.id, list_id: creatingListId });
           window.dispatchEvent(
@@ -251,7 +298,24 @@ const IndexSimple = () => {
           .is_private,
       };
 
-      const assigneeIds = (activityData as any).assignees || [];
+      const rawAssignees2 = (activityData as unknown as { assignees?: unknown })
+        .assignees;
+      let assigneeIds2: string[] = [];
+      if (Array.isArray(rawAssignees2)) {
+        assigneeIds2 = rawAssignees2
+          .map((a) => {
+            if (typeof a === "string") return a;
+            if (a && typeof a === "object") {
+              return (
+                (a as { user_id?: string; id?: string }).user_id ??
+                (a as { user_id?: string; id?: string }).id ??
+                null
+              );
+            }
+            return null;
+          })
+          .filter(Boolean) as string[];
+      }
 
       const success = await updateActivity(updateData);
       if (success) {
@@ -376,8 +440,12 @@ const IndexSimple = () => {
             ) : (
               <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
             )}
-            <span className="hidden sm:inline">{showCalendar ? "Ocultar" : "Mostrar"} Calendário</span>
-            <span className="sm:hidden">{showCalendar ? "Ocultar" : "Calendário"}</span>
+            <span className="hidden sm:inline">
+              {showCalendar ? "Ocultar" : "Mostrar"} Calendário
+            </span>
+            <span className="sm:hidden">
+              {showCalendar ? "Ocultar" : "Calendário"}
+            </span>
           </Button>
         </div>
 
@@ -389,7 +457,9 @@ const IndexSimple = () => {
         {/* Filters Row */}
         <div className="flex flex-wrap gap-1 sm:gap-2">
           <button
-            onClick={() => setSelectedFilter(selectedFilter === null ? null : null)}
+            onClick={() =>
+              setSelectedFilter(selectedFilter === null ? null : null)
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === null
                 ? "bg-blue-600 dark:bg-blue-500 text-white shadow-md"
@@ -399,7 +469,9 @@ const IndexSimple = () => {
             Todas
           </button>
           <button
-            onClick={() => setSelectedFilter(selectedFilter === "pending" ? null : "pending")}
+            onClick={() =>
+              setSelectedFilter(selectedFilter === "pending" ? null : "pending")
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === "pending"
                 ? "bg-blue-500 text-white shadow-md"
@@ -409,7 +481,11 @@ const IndexSimple = () => {
             Pendentes
           </button>
           <button
-            onClick={() => setSelectedFilter(selectedFilter === "in_progress" ? null : "in_progress")}
+            onClick={() =>
+              setSelectedFilter(
+                selectedFilter === "in_progress" ? null : "in_progress"
+              )
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === "in_progress"
                 ? "bg-yellow-500 text-white shadow-md"
@@ -420,7 +496,11 @@ const IndexSimple = () => {
             <span className="sm:hidden">Andamento</span>
           </button>
           <button
-            onClick={() => setSelectedFilter(selectedFilter === "completed" ? null : "completed")}
+            onClick={() =>
+              setSelectedFilter(
+                selectedFilter === "completed" ? null : "completed"
+              )
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === "completed"
                 ? "bg-green-500 text-white shadow-md"
@@ -430,7 +510,9 @@ const IndexSimple = () => {
             Concluídas
           </button>
           <button
-            onClick={() => setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")}
+            onClick={() =>
+              setSelectedFilter(selectedFilter === "overdue" ? null : "overdue")
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === "overdue"
                 ? "bg-red-500 text-white shadow-md"
@@ -440,7 +522,9 @@ const IndexSimple = () => {
             Atrasadas
           </button>
           <button
-            onClick={() => setSelectedFilter(selectedFilter === "today" ? null : "today")}
+            onClick={() =>
+              setSelectedFilter(selectedFilter === "today" ? null : "today")
+            }
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
               selectedFilter === "today"
                 ? "bg-purple-500 text-white shadow-md"
@@ -478,22 +562,26 @@ const IndexSimple = () => {
             onClick={() => setActivitiesMinimized(!activitiesMinimized)}
             className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            <div className={`transition-transform duration-300 ease-in-out ${
-              activitiesMinimized ? 'rotate-0' : 'rotate-180'
-            }`}>
+            <div
+              className={`transition-transform duration-300 ease-in-out ${
+                activitiesMinimized ? "rotate-0" : "rotate-180"
+              }`}
+            >
               <ChevronDown className="h-4 w-4" />
             </div>
             <span className="text-xs transition-all duration-200">
-              {activitiesMinimized ? 'Expandir' : 'Minimizar'}
+              {activitiesMinimized ? "Expandir" : "Minimizar"}
             </span>
           </Button>
         </div>
 
-        <div className={`transition-all duration-500 ease-in-out transform ${
-          activitiesMinimized 
-            ? 'max-h-0 opacity-0 overflow-hidden scale-y-95 -translate-y-2' 
-            : 'max-h-none opacity-100 scale-y-100 translate-y-0'
-        }`}>
+        <div
+          className={`transition-all duration-500 ease-in-out transform ${
+            activitiesMinimized
+              ? "max-h-0 opacity-0 overflow-hidden scale-y-95 -translate-y-2"
+              : "max-h-none opacity-100 scale-y-100 translate-y-0"
+          }`}
+        >
           <div className="pb-4">
             <SubsectorCards
               activities={filteredActivities}
@@ -518,6 +606,19 @@ const IndexSimple = () => {
                   | "completed"
                   | "archived")
               : null
+          }
+          monthStart={
+            new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+          }
+          monthEnd={
+            new Date(
+              currentMonth.getFullYear(),
+              currentMonth.getMonth() + 1,
+              0,
+              23,
+              59,
+              59
+            )
           }
         />
       </div>

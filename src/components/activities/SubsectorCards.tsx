@@ -175,18 +175,9 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
     : null;
 
   // Ref para medir o tamanho do cartão
-  const overlayCardRef = useRef<HTMLDivElement>(null);
-  const [cardSize, setCardSize] = useState<{ width: number; height: number }>({
-    width: 280,
-    height: 100,
-  });
-
-  useEffect(() => {
-    if (overlayCardRef.current) {
-      const rect = overlayCardRef.current.getBoundingClientRect();
-      setCardSize({ width: rect.width, height: rect.height });
-    }
-  }, [activeId]);
+  // We no longer measure the overlay size or apply manual transforms. The
+  // DragOverlay is positioned by dnd-kit; to center the overlay at the
+  // pointer we apply a nested transform on the inner element (translate(-50%,-50%)).
 
   return (
     <>
@@ -253,13 +244,8 @@ export const SubsectorCards: React.FC<SubsectorCardsProps> = ({
         <DragOverlay dropAnimation={null} adjustScale={false}>
           {activeActivity ? (
             <div
-              ref={overlayCardRef}
-              className="bg-white dark:bg-[#161616] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 opacity-90 w-[280px] pointer-events-none drag-overlay-center"
-              style={{
-                transform: `translate(-${cardSize.width / 2 + 24}px, -${
-                  cardSize.height / 2
-                }px)`,
-              }}
+              className="bg-white dark:bg-[#161616] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 opacity-90 w-[280px] pointer-events-none"
+              style={{ transform: "translate(-50%, -50%)" }}
             >
               <ActivityCard activity={activeActivity} isOverlay={true} />
             </div>

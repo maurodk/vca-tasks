@@ -27,6 +27,7 @@ import { Activity } from "@/hooks/useActivities";
 const Index = () => {
   const { profile } = useAuth();
   const { activities, loading, refetch } = useIndexActivities();
+  const [currentMonth] = useState(new Date());
   const { createActivity, updateActivity, archiveActivity } =
     useActivityOperations();
   const { toast } = useToast();
@@ -473,6 +474,19 @@ const Index = () => {
                   | "completed"
                   | "archived")
               : null
+          }
+          monthStart={
+            new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
+          }
+          monthEnd={
+            new Date(
+              currentMonth.getFullYear(),
+              currentMonth.getMonth() + 1,
+              0,
+              23,
+              59,
+              59
+            )
           }
         />
       </div>

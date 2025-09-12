@@ -43,12 +43,16 @@ interface Props {
   onCreateCard: (listId: string) => void;
   onEditCard: (activity: Activity) => void;
   statusFilter?: "pending" | "in_progress" | "completed" | "archived" | null;
+  monthStart: Date;
+  monthEnd: Date;
 }
 
 export const PersonalListsBoard: React.FC<Props> = ({
   onCreateCard,
   onEditCard,
   statusFilter = null,
+  monthStart,
+  monthEnd,
 }) => {
   const { lists, createList, renameList, deleteList } = usePersonalLists();
   const { user } = useAuth();
@@ -83,14 +87,22 @@ export const PersonalListsBoard: React.FC<Props> = ({
     async (listId: string) => {
       setLoadingLists((s) => ({ ...s, [listId]: true }));
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("activities")
           .select(
             `*, profiles:user_id(full_name, avatar_url), subtasks(id, title, is_completed, checklist_group, order_index, description, activity_id, created_at, updated_at)`
           )
           .eq("list_id", listId)
-          .neq("status", "archived")
-          .order("created_at", { ascending: false });
+          .neq("status", "archived");
+
+        // Always filter by month
+        query = query
+          .gte("created_at", monthStart.toISOString())
+          .lte("created_at", monthEnd.toISOString());
+
+        const { data, error } = await query.order("created_at", {
+          ascending: false,
+        });
         if (error) throw error;
         // Order subtasks client-side to ensure stable render
         const normalized = ((data as unknown as Activity[]) || []).map((a) => ({
@@ -135,7 +147,7 @@ export const PersonalListsBoard: React.FC<Props> = ({
         setLoadingLists((s) => ({ ...s, [listId]: false }));
       }
     },
-    [sortOrder, manualOrder]
+    [sortOrder, manualOrder, monthStart, monthEnd]
   );
 
   const listIds = React.useMemo(

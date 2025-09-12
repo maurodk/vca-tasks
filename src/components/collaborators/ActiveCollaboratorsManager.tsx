@@ -106,11 +106,18 @@ const ActiveCollaboratorsManager: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
   const [editingSector, setEditingSector] = useState<string>("");
   const [editingSubsectors, setEditingSubsectors] = useState<string[]>([]);
-  const [sectors, setSectors] = useState<Array<{id: string, name: string}>>([]);
-  const [allSubsectors, setAllSubsectors] = useState<Array<{id: string, name: string, sector_id: string}>>([]);
+  const [sectors, setSectors] = useState<Array<{ id: string; name: string }>>(
+    []
+  );
+  const [allSubsectors, setAllSubsectors] = useState<
+    Array<{ id: string; name: string; sector_id: string }>
+  >([]);
   const [saving, setSaving] = useState(false);
-  const { subsectors: profileSubsectors, updateSubsectors } = useMultipleSubsectors(selectedCollaborator?.id);
-  const [selectedActivity, setSelectedActivity] = useState<FullActivity | null>(null);
+  const { subsectors: profileSubsectors, updateSubsectors } =
+    useMultipleSubsectors(selectedCollaborator?.id);
+  const [selectedActivity, setSelectedActivity] = useState<FullActivity | null>(
+    null
+  );
   const [activityModalOpen, setActivityModalOpen] = useState(false);
 
   // ESC fecha modal do colaborador
@@ -155,7 +162,71 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      setCollaborators(data || []);
+      // Normalize supabase response into our Collaborator[] shape. The select with
+      // nested relationships can produce typed helpers from Supabase; to keep
+      // runtime safety and satisfy TS we perform a runtime guard and map the
+      // expected fields. This avoids unsafe any casts while still storing the
+      // useful data in state.
+      if (Array.isArray(data)) {
+        const normalized = (data as unknown[]).map((row) => {
+          const r = row as Record<string, unknown>;
+          const profile_subsectors = Array.isArray(
+            r.profile_subsectors as unknown
+          )
+            ? (r.profile_subsectors as unknown[])
+            : [];
+
+          const mappedProfileSubs = profile_subsectors.map((ps) => {
+            const p = ps as Record<string, unknown>;
+            return {
+              subsector_id: String(p.subsector_id ?? ""),
+              subsectors: p.subsectors
+                ? {
+                    name: String(
+                      (p.subsectors as Record<string, unknown>).name ?? ""
+                    ),
+                  }
+                : undefined,
+            };
+          });
+
+          const collaborator: Collaborator = {
+            id: String(r.id ?? ""),
+            email: String(r.email ?? ""),
+            full_name: String(r.full_name ?? ""),
+            avatar_url: (r.avatar_url as string) ?? undefined,
+            role:
+              (r.role as unknown as "manager" | "collaborator") ||
+              "collaborator",
+            sector_id: String(r.sector_id ?? ""),
+            subsector_id: (r.subsector_id as string) ?? undefined,
+            is_approved: (r.is_approved as boolean) ?? undefined,
+            created_at: String(r.created_at ?? ""),
+            updated_at: String(r.updated_at ?? ""),
+            sectors: r.sectors
+              ? {
+                  name: String(
+                    (r.sectors as Record<string, unknown>).name ?? ""
+                  ),
+                }
+              : undefined,
+            subsectors: r.subsectors
+              ? {
+                  name: String(
+                    (r.subsectors as Record<string, unknown>).name ?? ""
+                  ),
+                }
+              : undefined,
+            profile_subsectors: mappedProfileSubs,
+          };
+
+          return collaborator;
+        });
+
+        setCollaborators(normalized);
+      } else {
+        setCollaborators([]);
+      }
     } catch (err: unknown) {
       const error = err as Error;
       setError("Erro ao carregar colaboradores: " + error.message);
@@ -206,19 +277,19 @@ const ActiveCollaboratorsManager: React.FC = () => {
     const q = query.trim().toLowerCase();
     return collaborators.filter((c) => {
       const matchName = q ? c.full_name.toLowerCase().includes(q) : true;
-      
+
       if (subsectorFilter === "all" || !subsectorFilter) {
         return matchName;
       }
-      
+
       // Verificar se tem o subsetor nos múltiplos subsetores
       const hasInMultiple = c.profile_subsectors?.some(
-        ps => ps.subsectors?.name === subsectorFilter
+        (ps) => ps.subsectors?.name === subsectorFilter
       );
-      
+
       // Verificar se tem no subsetor principal (compatibilidade)
       const hasInPrimary = c.subsectors?.name === subsectorFilter;
-      
+
       return matchName && (hasInMultiple || hasInPrimary);
     });
   }, [collaborators, query, subsectorFilter]);
@@ -305,7 +376,7 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
   const handleSaveChanges = async () => {
     if (!selectedCollaborator) return;
-    
+
     setSaving(true);
     try {
       // Atualizar setor e subsetor principal (compatibilidade)
@@ -321,13 +392,13 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
       // Atualizar múltiplos subsetores
       const success = await updateSubsectors(editingSubsectors);
-      if (!success) throw new Error('Falha ao atualizar subsetores');
+      if (!success) throw new Error("Falha ao atualizar subsetores");
 
       toast({
         title: "Sucesso",
         description: "Colaborador atualizado com sucesso.",
       });
-      
+
       setEditMode(false);
       fetchCollaborators();
     } catch (error) {
@@ -511,13 +582,13 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
   const uniqueSubsectors = useMemo(() => {
     const subsectorNames = new Set<string>();
-    
+
     collaborators.forEach((c) => {
       // Adicionar subsetor principal
       if (c.subsectors?.name) {
         subsectorNames.add(c.subsectors.name);
       }
-      
+
       // Adicionar múltiplos subsetores
       c.profile_subsectors?.forEach((ps) => {
         if (ps.subsectors?.name) {
@@ -525,8 +596,10 @@ const ActiveCollaboratorsManager: React.FC = () => {
         }
       });
     });
-    
-    return Array.from(subsectorNames).filter(name => name.length > 0).sort();
+
+    return Array.from(subsectorNames)
+      .filter((name) => name.length > 0)
+      .sort();
   }, [collaborators]);
 
   const groupedByDate = useMemo(() => {
@@ -750,25 +823,31 @@ const ActiveCollaboratorsManager: React.FC = () => {
                                 {selectedCollaborator.sectors.name}
                               </Badge>
                             )}
-                              {/* Mostrar múltiplos subsetores */}
-                            {selectedCollaborator.profile_subsectors && selectedCollaborator.profile_subsectors.length > 0 ? (
-                              selectedCollaborator.profile_subsectors.map((ps: any, index: number) => (
-                                <Badge
-                                  key={index}
-                                  variant="outline"
-                                  className="border-secondary/20"
-                                >
-                                  {ps.subsectors?.name}
-                                </Badge>
-                              ))
-                            ) : selectedCollaborator.subsectors && (
-                              <Badge
-                                variant="outline"
-                                className="border-secondary/20"
-                              >
-                                {selectedCollaborator.subsectors.name}
-                              </Badge>
-                            )}
+                            {/* Mostrar múltiplos subsetores */}
+                            {selectedCollaborator.profile_subsectors &&
+                            selectedCollaborator.profile_subsectors.length > 0
+                              ? selectedCollaborator.profile_subsectors.map(
+                                  (
+                                    ps: Collaborator["profile_subsectors"][number],
+                                    index: number
+                                  ) => (
+                                    <Badge
+                                      key={index}
+                                      variant="outline"
+                                      className="border-secondary/20"
+                                    >
+                                      {ps.subsectors?.name}
+                                    </Badge>
+                                  )
+                                )
+                              : selectedCollaborator.subsectors && (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-secondary/20"
+                                  >
+                                    {selectedCollaborator.subsectors.name}
+                                  </Badge>
+                                )}
                           </div>
                         </div>
                       </>
@@ -796,7 +875,10 @@ const ActiveCollaboratorsManager: React.FC = () => {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label>Setor</Label>
-                        <Select value={editingSector} onValueChange={setEditingSector}>
+                        <Select
+                          value={editingSector}
+                          onValueChange={setEditingSector}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione um setor" />
                           </SelectTrigger>
@@ -813,8 +895,8 @@ const ActiveCollaboratorsManager: React.FC = () => {
                         <Label>Subsetores</Label>
                         <MultiSelect
                           options={allSubsectors
-                            .filter(s => s.sector_id === editingSector)
-                            .map(s => ({ value: s.id, label: s.name }))}
+                            .filter((s) => s.sector_id === editingSector)
+                            .map((s) => ({ value: s.id, label: s.name }))}
                           selected={editingSubsectors}
                           onChange={setEditingSubsectors}
                           placeholder="Selecione subsetores"
@@ -928,7 +1010,9 @@ const ActiveCollaboratorsManager: React.FC = () => {
                                         activity as unknown as FullActivity
                                       }
                                       onClick={() => {
-                                        setSelectedActivity(activity as unknown as FullActivity);
+                                        setSelectedActivity(
+                                          activity as unknown as FullActivity
+                                        );
                                         setActivityModalOpen(true);
                                       }}
                                     />
