@@ -149,9 +149,11 @@ const Profile = () => {
         // Remover avatar
         if (profile.avatar_url) {
           // Tentar remover arquivo antigo do storage
-          const oldFileName = profile.avatar_url.split("/").pop();
+          const urlParts = profile.avatar_url.split("/");
+          const oldFileName = urlParts[urlParts.length - 1];
+          const oldFilePath = `${profile.id}/${oldFileName}`;
           if (oldFileName) {
-            await supabase.storage.from("avatars").remove([oldFileName]);
+            await supabase.storage.from("avatars").remove([oldFilePath]);
           }
         }
 
@@ -176,7 +178,7 @@ const Profile = () => {
       // Upload nova imagem
       const fileExt = file.name.split(".").pop() || "jpg";
       const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
-      const filePath = fileName; // Remover pasta 'avatars/' temporariamente
+      const filePath = `${profile.id}/${fileName}`; // Usar estrutura de pasta por usuário
 
       // Remover arquivo antigo se existir
       if (profile.avatar_url) {

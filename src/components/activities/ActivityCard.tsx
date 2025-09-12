@@ -89,11 +89,11 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
 
   return (
     <div
-      className={`p-3 cursor-pointer group transition-all duration-200 h-full ${
+      className={`p-3 cursor-pointer group transition-all duration-200 ${
         activity.priority === "high"
           ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 shadow-md hover:shadow-lg"
           : ""
-      } flex flex-col`}
+      } h-full flex flex-col`}
       onClick={onClick}
     >
       {/* Título + marcador de privacidade */}
@@ -243,39 +243,13 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
         </div>
       )}
 
-      {/* Usuários responsáveis */}
-      {(() => {
-        const assignees = activity.activity_assignees || [];
-        const fallbackUser = activity.profiles;
-
-        if (assignees.length > 0) {
-          const firstAssignee = assignees[0]?.profiles?.full_name || "Usuário";
-          const additionalCount = assignees.length - 1;
-
-          return (
-            <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-              <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
-              <span>
-                {firstAssignee}
-                {additionalCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-full text-[10px] font-medium">
-                    +{additionalCount}
-                  </span>
-                )}
-              </span>
-            </div>
-          );
-        } else if (fallbackUser) {
-          return (
-            <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-              <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
-              <span>{fallbackUser.full_name || "Usuário"}</span>
-            </div>
-          );
-        }
-
-        return null;
-      })()}
+      {/* Usuário responsável */}
+      {activity.profiles && (
+        <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+          <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
+          <span>{activity.profiles.full_name || "Usuário"}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,8 @@ interface CreateActivityData {
   user_id?: string;
   // Optional privacy flag
   is_private?: boolean;
+  // Optional custom creation date
+  created_at?: string;
 }
 
 interface UpdateActivityData extends Partial<CreateActivityData> {
@@ -48,6 +50,7 @@ export function useActivityOperations() {
             user_id: data.user_id ?? user.id,
             sector_id: profile.sector_id,
             is_private: data.is_private ?? false,
+            created_at: data.created_at || new Date().toISOString(),
           };
 
         const { data: activity, error } = await supabase

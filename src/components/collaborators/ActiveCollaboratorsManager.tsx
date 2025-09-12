@@ -171,9 +171,12 @@ const ActiveCollaboratorsManager: React.FC = () => {
 
   useEffect(() => {
     fetchCollaborators();
+  }, [fetchCollaborators]);
+
+  useEffect(() => {
     fetchSectors();
     fetchAllSubsectors();
-  }, [profile?.sector_id, fetchCollaborators]);
+  }, []);
 
   const fetchSectors = async () => {
     try {

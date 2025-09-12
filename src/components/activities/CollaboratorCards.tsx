@@ -1,16 +1,36 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Activity } from "@/hooks/useActivities";
 import { ActivityCard } from "@/components/activities/ActivityCard";
+import { DroppableCollaboratorCard } from "@/components/activities/DroppableCollaboratorCard";
 import { useAuth } from "@/hooks/useAuth";
+import { useActivityOperations } from "@/hooks/useActivityOperations";
 import { supabase } from "@/lib/supabase";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus, SortAsc, Clock } from "lucide-react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
 
 interface Collaborator {
   id: string;
   full_name: string;
   avatar_url?: string | null;
 }
+
+type SortOrder = 'alphabetical' | 'creation' | null;
 
 interface CollaboratorCardsProps {
   activities: Activity[];
@@ -26,7 +46,22 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
   onAddActivity,
 }) => {
   const { profile } = useAuth();
+  const { updateActivity } = useActivityOperations();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('creation');
+  const [manualOrder, setManualOrder] = useState<string[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     const fetchCollaborators = async () => {
@@ -78,72 +113,152 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
     fetchCollaborators();
   }, [profile?.sector_id, subsectorId]);
 
+  // Função para mover atividade entre colaboradores
+  const moveActivity = async (activityId: string, newUserId: string) => {
+    try {
+      await updateActivity({ id: activityId, user_id: newUserId });
+    } catch (error) {
+      console.error('Erro ao mover atividade:', error);
+    }
+  };
+
+  const sortedActivities = useMemo(() => {
+    const sorted = [...activities];
+    if (sortOrder === 'alphabetical') {
+      return sorted.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    if (sortOrder === 'creation') {
+      return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    // Manual order (when no filter is selected)
+    if (manualOrder.length === 0) {
+      setManualOrder(sorted.map(a => a.id));
+      return sorted;
+    }
+    return manualOrder.map(id => sorted.find(a => a.id === id)).filter(Boolean) as Activity[];
+  }, [activities, sortOrder, manualOrder]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    // Only visual feedback, no actual moving
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // Move between collaborators
+    if (overId.startsWith('collaborator-')) {
+      const newUserId = overId.replace('collaborator-', '');
+      const activity = activities.find(a => a.id === activeId);
+      if (activity && activity.user_id !== newUserId) {
+        await moveActivity(activeId, newUserId);
+        // Force refresh
+        window.dispatchEvent(new CustomEvent('activities-updated'));
+      }
+      return;
+    }
+
+    // Reorder within same collaborator (manual mode only)
+    if (sortOrder === null) {
+      const oldIndex = manualOrder.indexOf(activeId);
+      const newIndex = manualOrder.indexOf(overId);
+
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const newOrder = [...manualOrder];
+        newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, activeId);
+        setManualOrder(newOrder);
+      }
+    }
+  };
+
+  const activeActivity = activeId ? activities.find(a => a.id === activeId) : null;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-      {collaborators.map((colab) => {
-        const colabActivities = activities.filter(
-          (a) => a.user_id === colab.id
-        );
-        return (
-          <div
-            key={colab.id}
-            className="bg-gray-100 dark:bg-[#1f1f1f] rounded-xl p-3 min-h-[120px] border border-gray-200 dark:border-gray-700 flex flex-col"
-          >
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2">
-                <Avatar className="h-6 w-6">
-                  <AvatarImage src={colab.avatar_url || undefined} />
-                  <AvatarFallback className="text-[10px]">
-                    {colab.full_name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
-                  {colab.full_name}
-                </span>
-              </div>
-              <span className="text-xs text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded-full">
-                {colabActivities.length}
-              </span>
-            </div>
+    <>
+      {/* Sort Controls */}
+      <div className="flex items-center gap-2 mb-4">
+        <Button
+          variant={sortOrder === 'alphabetical' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSortOrder(sortOrder === 'alphabetical' ? null : 'alphabetical')}
+          className="h-8 w-8 p-0"
+          title="Ordem alfabética"
+        >
+          <SortAsc className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={sortOrder === 'creation' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSortOrder(sortOrder === 'creation' ? null : 'creation')}
+          className="h-8 w-8 p-0"
+          title="Ordem de criação"
+        >
+          <Clock className="h-4 w-4" />
+        </Button>
+      </div>
 
-            <div className="flex-1 flex flex-col gap-2 max-h-[65vh] lg:max-h-[70vh] overflow-y-auto pr-1">
-              {colabActivities.length === 0 ? (
-                <button
-                  className="mt-1 p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all duration-150 flex items-center gap-2 text-sm"
-                  onClick={() => onAddActivity(colab.id, colab.full_name)}
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Adicionar um cartão</span>
-                </button>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {colabActivities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="bg-white dark:bg-[#161616] rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all duration-150 hover:shadow-md overflow-hidden flex-shrink-0"
-                      onClick={() => onEditActivity(activity)}
-                    >
-                      <ActivityCard activity={activity} />
-                    </div>
-                  ))}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        measuring={{
+          droppable: {
+            strategy: 'always',
+          },
+        }}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+          {collaborators.map((colab) => {
+            const colabActivities = sortedActivities.filter(
+              (a) => a.user_id === colab.id
+            );
+            
+            return (
+              <DroppableCollaboratorCard
+                key={colab.id}
+                collaborator={colab}
+                activities={colabActivities}
+                onAddActivity={onAddActivity}
+                onEditActivity={onEditActivity}
+              />
+            );
+          })}
+        </div>
 
-                  <button
-                    className="mt-1 p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all duration-150 flex items-center gap-2 text-sm"
-                    onClick={() => onAddActivity(colab.id, colab.full_name)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Adicionar um cartão</span>
-                  </button>
-                </div>
-              )}
+        <DragOverlay 
+          dropAnimation={null}
+          adjustScale={false}
+          style={{
+            transformOrigin: '0 0',
+          }}
+          modifyTranslate={({ transform }) => {
+            return {
+              x: transform.x - 140, // metade da largura do card (280px / 2)
+              y: transform.y - 50,   // ajuste vertical para centralizar
+              scaleX: 1,
+              scaleY: 1,
+            };
+          }}
+        >
+          {activeActivity ? (
+            <div className="bg-white dark:bg-[#161616] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 opacity-90 w-[280px] rotate-2 pointer-events-none">
+              <ActivityCard activity={activeActivity} />
             </div>
-          </div>
-        );
-      })}
-    </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </>
   );
 };
