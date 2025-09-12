@@ -110,10 +110,10 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
               </span>
             </div>
 
-            <div className="flex-1 flex flex-col gap-2">
+            <div className="flex-1 flex flex-col gap-2 max-h-[65vh] lg:max-h-[70vh] overflow-y-auto pr-1">
               {colabActivities.length === 0 ? (
                 <button
-                  className="mt-1 p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 transition-all duration-150 flex items-center gap-2 text-sm"
+                  className="mt-1 p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all duration-150 flex items-center gap-2 text-sm"
                   onClick={() => onAddActivity(colab.id, colab.full_name)}
                 >
                   <Plus className="h-4 w-4" />
@@ -124,7 +124,7 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
                   {colabActivities.map((activity) => (
                     <div
                       key={activity.id}
-                      className="bg-white dark:bg-[#161616] rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all duration-150 hover:shadow-md"
+                      className="bg-white dark:bg-[#161616] rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer transition-all duration-150 hover:shadow-md overflow-hidden flex-shrink-0"
                       onClick={() => onEditActivity(activity)}
                     >
                       <ActivityCard activity={activity} />
@@ -132,7 +132,7 @@ export const CollaboratorCards: React.FC<CollaboratorCardsProps> = ({
                   ))}
 
                   <button
-                    className="mt-1 p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 transition-all duration-150 flex items-center gap-2 text-sm"
+                    className="mt-1 p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all duration-150 flex items-center gap-2 text-sm"
                     onClick={() => onAddActivity(colab.id, colab.full_name)}
                   >
                     <Plus className="h-4 w-4" />

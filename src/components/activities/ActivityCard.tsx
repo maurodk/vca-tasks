@@ -247,13 +247,11 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
       {(() => {
         const assignees = activity.activity_assignees || [];
         const fallbackUser = activity.profiles;
-        
 
-        
         if (assignees.length > 0) {
           const firstAssignee = assignees[0]?.profiles?.full_name || "Usuário";
           const additionalCount = assignees.length - 1;
-          
+
           return (
             <div className="mt-auto flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
               <User className="h-3 w-3 text-gray-700 dark:text-gray-400" />
@@ -275,7 +273,7 @@ export function ActivityCard({ activity, onClick }: ActivityCardProps) {
             </div>
           );
         }
-        
+
         return null;
       })()}
     </div>
