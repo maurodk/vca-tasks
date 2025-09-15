@@ -31,14 +31,12 @@ import {
   AlertCircle,
   Trash2,
   RotateCcw,
-
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { Activity } from "@/hooks/useActivities";
 import { ArchivedActivity } from "@/hooks/useArchivedActivities";
-
 
 export function Archived() {
   const { profile } = useAuth();
@@ -49,7 +47,6 @@ export function Archived() {
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
-
 
   // Usando o hook específico para atividades arquivadas
   const { activities, loading, deleteActivity, unarchiveActivity } =
@@ -121,9 +118,21 @@ export function Archived() {
 
   if (!profile) return null;
 
-  // Agrupar por data de arquivamento (usando created_at como proxy)
+  // Helper to choose the archive timestamp: prefer activity_history entry with action 'archived'
+  const getArchiveTimestamp = (activity: ArchivedActivity): string => {
+    const history = activity.activity_history;
+    if (Array.isArray(history)) {
+      const h = history.find((x) => x.action === "archived");
+      if (h && h.created_at) return h.created_at;
+    }
+    return activity.updated_at || activity.created_at;
+  };
+
+  // Agrupar por data de arquivamento: preferir o timestamp do histórico (action: 'archived'),
+  // senão usar updated_at, senão created_at.
   const groupedActivities = activities.reduce((groups, activity) => {
-    const dateKey = new Date(activity.created_at).toLocaleDateString("pt-BR");
+    const archiveDate = getArchiveTimestamp(activity);
+    const dateKey = new Date(archiveDate).toLocaleDateString("pt-BR");
     if (!groups[dateKey]) {
       groups[dateKey] = [];
     }
@@ -304,7 +313,9 @@ export function Archived() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                              <AlertDialogContent
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
                                     Excluir atividade
@@ -342,7 +353,10 @@ export function Archived() {
                           {activity.description}
                         </p>
                         <div className="flex justify-between items-center">
-                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <div
+                            className="flex gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Badge variant="outline">{activity.status}</Badge>
                             {activity.priority && (
                               <Badge
@@ -360,7 +374,7 @@ export function Archived() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {formatDistanceToNow(
-                              new Date(activity.created_at),
+                              new Date(getArchiveTimestamp(activity)),
                               {
                                 addSuffix: true,
                                 locale: ptBR,

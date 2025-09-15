@@ -70,10 +70,10 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         setPriority(activity.priority || "medium");
         setStatus(activity.status || "pending");
         setSubtasks(activity.subtasks || []);
-        
+
         // Carregar múltiplos responsáveis
         setAssigneeIds(activity.user_id ? [activity.user_id] : []);
-        
+
         const maybePrivate = (activity as unknown as { is_private?: boolean })
           .is_private;
         setIsPrivate(Boolean(maybePrivate));
@@ -93,7 +93,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         setIsPrivate(false);
       }
     };
-    
+
     loadActivityData();
   }, [activity, defaultDueDate, user?.id]);
 
@@ -116,7 +116,20 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
   }, [isOpen, activity, defaultDueDate, user?.id]);
 
   // ESC fecha modal
-  useGlobalEscClose(isOpen, onClose, 160);
+  // When ESC or backdrop click occurs we want to auto-save then close
+  const handleAutoClose = async () => {
+    // If already saving, do nothing (avoid duplicate saves)
+    if (isSaving) return;
+    try {
+      await handleSave();
+    } catch (e) {
+      // swallow - handleSave already handles errors and shows toast
+    } finally {
+      onClose();
+    }
+  };
+
+  useGlobalEscClose(isOpen, handleAutoClose, 160);
 
   // Bloquear scroll do body quando o modal estiver aberto para evitar "pulo"/reflow ao abrir dropdowns
   useEffect(() => {
@@ -135,7 +148,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
       if (!isOpen) return;
       if (isManager && profile?.sector_id) {
         let list: Array<{ id: string; full_name: string }> = [];
-        
+
         // Usar subsectorId da prop ou da atividade existente
         const targetSubsectorId = subsectorId || activity?.subsector_id;
 
@@ -195,7 +208,6 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
         subtasks: subtasks,
         is_private: isPrivate,
         user_id: assigneeIds[0] || user?.id,
-        assignees: assigneeIds,
       };
 
       await onSave(updatedActivity);
@@ -211,7 +223,7 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleAutoClose}
       />
 
       {/* Modal */}
@@ -305,7 +317,10 @@ export const ActivityEditModal: React.FC<ActivityEditModalProps> = ({
                 <div className="space-y-2">
                   <Label>Responsáveis</Label>
                   <MultiSelect
-                    options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                    options={users.map((u) => ({
+                      value: u.id,
+                      label: u.full_name,
+                    }))}
                     selected={assigneeIds}
                     onChange={setAssigneeIds}
                     placeholder="Selecione responsáveis"

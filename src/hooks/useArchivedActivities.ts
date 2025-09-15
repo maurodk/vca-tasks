@@ -25,6 +25,12 @@ export type ArchivedActivity = ActivityRow & {
   profiles?: ProfileData | null;
   subsectors?: SubsectorData | null;
   subtasks?: Subtask[];
+  activity_history?: {
+    id: string;
+    action: string;
+    created_at: string;
+    performed_by?: string;
+  }[];
 };
 
 /**
@@ -68,6 +74,12 @@ export function useArchivedActivities() {
             order_index,
             created_at,
             updated_at
+          ),
+          activity_history (
+            id,
+            action,
+            created_at,
+            performed_by
           )
         `
         )
@@ -77,13 +89,18 @@ export function useArchivedActivities() {
 
       if (profile.role === "collaborator") {
         // Buscar subsetores do colaborador
+        // supabase types for this project may not include profile_subsectors, cast to any
         const { data: userSubsectors } = await supabase
-          .from("profile_subsectors")
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .from("profile_subsectors" as any)
           .select("subsector_id")
           .eq("profile_id", profile.id);
 
-        const subsectorIds = userSubsectors?.map(ps => ps.subsector_id) || [];
-        
+        // cast to any to avoid TS mismatch from generated supabase types
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const subsectorIds =
+          (userSubsectors as any)?.map((ps: any) => ps.subsector_id) || [];
+
         // Construir filtro para múltiplos subsetores
         if (subsectorIds.length > 0) {
           query = query.in("subsector_id", subsectorIds);

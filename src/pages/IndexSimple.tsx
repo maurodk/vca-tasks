@@ -236,13 +236,7 @@ const IndexSimple = () => {
     };
 
     if (isCreating && (newActivitySubsector || creatingListId)) {
-      // Usar o primeiro dia do mês selecionado como data de criação
-      const createdAt = new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth(),
-        1
-      ).toISOString();
-
+      // Do not override created_at — let server/db set the real creation timestamp
       const createData = {
         title: activityData.title || "",
         description: activityData.description,
@@ -254,7 +248,6 @@ const IndexSimple = () => {
         is_private:
           (activityData as unknown as { is_private?: boolean }).is_private ??
           Boolean(creatingListId),
-        created_at: createdAt,
       };
 
       const assigneeIds = extractAssigneeIds(activityData);
