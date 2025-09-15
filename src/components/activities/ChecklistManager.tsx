@@ -20,6 +20,7 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
+  const [explicitGroups, setExplicitGroups] = useState<string[]>([]);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [groupDraftName, setGroupDraftName] = useState<string>("");
 
@@ -36,22 +37,20 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
     {}
   );
 
+  // Union of explicit groups and groups present on subtasks
+  // NOTE: do NOT include the default 'Checklist' automatically — only show groups
+  // that come from existing subtasks or were explicitly created by the user.
+  const allGroupNames = Array.from(
+    new Set([...explicitGroups, ...Object.keys(groupedSubtasks)])
+  );
+
   const handleAddGroup = () => {
-    if (!newGroupName.trim()) return;
     const group = newGroupName.trim();
-    // Cria um item vazio para garantir que o grupo apareça
-    const initialSubtask: Subtask = {
-      id: `temp-${Date.now()}`,
-      activity_id: "",
-      title: "",
-      description: null,
-      is_completed: false,
-      order_index: subtasks.length,
-      checklist_group: group,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    onSubtasksChange([...subtasks, initialSubtask]);
+    if (!group) return;
+    // Add explicit group so it appears even without subtasks
+    setExplicitGroups((prev) =>
+      prev.includes(group) ? prev : [...prev, group]
+    );
     setSelectedGroup(group);
     setNewTaskTitle("");
     setNewGroupName("");
@@ -106,6 +105,7 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       (task) => (task.checklist_group || "Checklist") !== groupName
     );
     onSubtasksChange(updatedSubtasks);
+    setExplicitGroups((prev) => prev.filter((g) => g !== groupName));
   };
 
   const startRenameGroup = (groupName: string) => {
@@ -131,6 +131,11 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
       return t;
     });
     onSubtasksChange(updated);
+    // Update explicit groups if present
+    setExplicitGroups((prev) => {
+      if (!prev.includes(oldName)) return prev;
+      return prev.map((g) => (g === oldName ? newName : g));
+    });
     setEditingGroup(null);
     setGroupDraftName("");
   };
@@ -189,7 +194,8 @@ export const ChecklistManager: React.FC<ChecklistManagerProps> = ({
 
       {/* Grupos de checklist */}
       <div className="space-y-3">
-        {Object.entries(groupedSubtasks).map(([groupName, tasks]) => {
+        {allGroupNames.map((groupName) => {
+          const tasks = groupedSubtasks[groupName] || [];
           const validTasks = tasks.filter((t) => t.title.trim());
           const completedTasks = validTasks.filter(
             (t) => t.is_completed
