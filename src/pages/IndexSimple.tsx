@@ -213,6 +213,28 @@ const IndexSimple = () => {
   };
 
   const handleSaveActivity = async (activityData: Partial<Activity>) => {
+    // helper to normalize assignees payload coming from the modal
+    const extractAssigneeIds = (data: Partial<Activity>) => {
+      const raw = (data as unknown as { assignees?: unknown }).assignees;
+      let ids: string[] = [];
+      if (Array.isArray(raw)) {
+        ids = raw
+          .map((a) => {
+            if (typeof a === "string") return a;
+            if (a && typeof a === "object") {
+              return (
+                (a as { user_id?: string; id?: string }).user_id ??
+                (a as { user_id?: string; id?: string }).id ??
+                null
+              );
+            }
+            return null;
+          })
+          .filter(Boolean) as string[];
+      }
+      return ids;
+    };
+
     if (isCreating && (newActivitySubsector || creatingListId)) {
       // Usar o primeiro dia do mês selecionado como data de criação
       const createdAt = new Date(
@@ -235,24 +257,7 @@ const IndexSimple = () => {
         created_at: createdAt,
       };
 
-      const rawAssignees = (activityData as unknown as { assignees?: unknown })
-        .assignees;
-      let assigneeIds: string[] = [];
-      if (Array.isArray(rawAssignees)) {
-        assigneeIds = rawAssignees
-          .map((a) => {
-            if (typeof a === "string") return a;
-            if (a && typeof a === "object") {
-              return (
-                (a as { user_id?: string; id?: string }).user_id ??
-                (a as { user_id?: string; id?: string }).id ??
-                null
-              );
-            }
-            return null;
-          })
-          .filter(Boolean) as string[];
-      }
+      const assigneeIds = extractAssigneeIds(activityData);
 
       const success = await createActivity(createData);
       if (success) {
@@ -298,24 +303,7 @@ const IndexSimple = () => {
           .is_private,
       };
 
-      const rawAssignees2 = (activityData as unknown as { assignees?: unknown })
-        .assignees;
-      let assigneeIds2: string[] = [];
-      if (Array.isArray(rawAssignees2)) {
-        assigneeIds2 = rawAssignees2
-          .map((a) => {
-            if (typeof a === "string") return a;
-            if (a && typeof a === "object") {
-              return (
-                (a as { user_id?: string; id?: string }).user_id ??
-                (a as { user_id?: string; id?: string }).id ??
-                null
-              );
-            }
-            return null;
-          })
-          .filter(Boolean) as string[];
-      }
+      const assigneeIds = extractAssigneeIds(activityData);
 
       const success = await updateActivity(updateData);
       if (success) {
